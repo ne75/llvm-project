@@ -23,8 +23,8 @@ using namespace llvm;
 
 void P2Subtarget::anchor() {}
 
-P2Subtarget::P2Subtarget(const Triple &TT, const std::string &CPU, const std::string &FS, const P2TargetMachine &TM, bool cogex) :
+P2Subtarget::P2Subtarget(const Triple &TT, const std::string &CPU, const std::string &FS, const P2TargetMachine &TM) :
         P2GenSubtargetInfo(TT, CPU, CPU, FS),
-        FrameLowering(TM), InstrInfo(), TLInfo(TM), is_cogex(cogex) {
+        FrameLowering(TM), InstrInfo(), TLInfo(TM) {
     ParseSubtargetFeatures(CPU, CPU, FS);
 }

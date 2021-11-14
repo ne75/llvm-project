@@ -52,7 +52,7 @@ class P2FunctionInfo : public MachineFunctionInfo {
     /// Size of the callee-saved register portion of the stack frame in bytes.
     unsigned CalleeSavedFrameSize;
 
-    /// this function is a cogex function
+    /// this function is intended to be loaded directly into a cog
     bool cogex;
 
     mutable int DynAllocFI; // Frame index of dynamically allocated stack area.

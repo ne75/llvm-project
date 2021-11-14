@@ -117,10 +117,11 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::JumpTable, MVT::i32, Custom);
     setOperationAction(ISD::BSWAP, MVT::i32, Expand);
 
-    // setup all the functions that will be libcalls.
-    setOperationAction(ISD::SDIV, MVT::i32, LibCall);
-    setOperationAction(ISD::SREM, MVT::i32, LibCall);
+    setOperationAction(ISD::SDIV, MVT::i32, Expand);
+    setOperationAction(ISD::SREM, MVT::i32, Expand);
+    setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
 
+    // setup all the functions that will be libcalls.
     setLibcallName(RTLIB::SDIV_I32, "__sdiv");
     setLibcallName(RTLIB::SREM_I32, "__srem");
     setLibcallName(RTLIB::MEMCPY, "__memcpy");

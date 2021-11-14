@@ -34,9 +34,7 @@ namespace llvm {
 
         std::unique_ptr<TargetLoweringObjectFile> TLOF;
 
-        // there are two subtargets, one for hubex mode, one for cogex mode
-        P2Subtarget hubex_subtarget;
-        P2Subtarget cogex_subtarget;
+        P2Subtarget subtarget;
 
     public:
         P2TargetMachine(const Target &T, const Triple &TT, StringRef CPU,
@@ -51,19 +49,19 @@ namespace llvm {
         // both subtargets have the same frame lowering, instruction info, etc, etc,
         // so just use the hubex subtarget for now. If that changes, we'll update it here
         const TargetFrameLowering *getFrameLowering() const {
-            return hubex_subtarget.getFrameLowering();
+            return subtarget.getFrameLowering();
         }
         const P2InstrInfo *getInstrInfo() const {
-            return hubex_subtarget.getInstrInfo();
+            return subtarget.getInstrInfo();
         }
         const TargetRegisterInfo *getRegisterInfo() const {
-            return hubex_subtarget.getRegisterInfo();
+            return subtarget.getRegisterInfo();
         }
         const P2TargetLowering *getTargetLowering() const {
-            return hubex_subtarget.getTargetLowering();
+            return subtarget.getTargetLowering();
         }
         const SelectionDAGTargetInfo *getSelectionDAGInfo() const {
-            return hubex_subtarget.getSelectionDAGInfo();
+            return subtarget.getSelectionDAGInfo();
         }
 
         // Pass Pipeline Configuration

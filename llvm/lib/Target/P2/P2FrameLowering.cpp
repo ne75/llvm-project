@@ -100,9 +100,9 @@ void P2FrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) 
     LLVM_DEBUG(MBB.dump());
 
     if (MF.getFunction().hasFnAttribute(Attribute::Cogmain)) {
-        LLVM_DEBUG(errs() << "cog entry function, saving ptra to r0\n");
+        LLVM_DEBUG(errs() << "cog entry function, saving ptra[0] to r0\n");
         DebugLoc DL = MBB.findDebugLoc(MBBI);
-        BuildMI(MBB, MBBI, DL, TII->get(P2::MOVrr))
+        BuildMI(MBB, MBBI, DL, TII->get(P2::RDLONGrr))
             .addReg(P2::R0)
             .addReg(P2::PTRA)
             .addImm(P2::ALWAYS)

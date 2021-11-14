@@ -215,7 +215,6 @@ void P2MCInstLower::lowerInstruction(const MachineInstr &MI, MCInst &AugMI, MCIn
                 // global addresses that require an AUGS/D to be in inserted to be fixedup later
                 createAugInst(MI, AugMI, i);
             }
-            
         }
 
         if (MCOp.isValid())
