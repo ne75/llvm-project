@@ -324,6 +324,7 @@ def RFWORD      : P2InstCZD<0b1101011, 0b000010001, (outs P2GPR:$d), (ins), "rfw
 def RFLONG      : P2InstCZD<0b1101011, 0b000010010, (outs P2GPR:$d), (ins), "rflong $d">;
 
 defm SETQ       : P2InstLDm<0b1101011, 0b000101000, "setq">;
+defm SETQ2      : P2InstLDm<0b1101011, 0b000101001, "setq2">;
 
 defm RDLUT      : P2InstCZIDSm<0b1010101, (ins), "rdlut">;
 defm WRLUT      : P2InstLIDSm<0b11000011, "wrlut">;

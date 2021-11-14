@@ -95,12 +95,14 @@ namespace lld {
                 }
                 case R_P2_COG9: {
                     uint32_t inst = read32le(loc);
-                    // TODO: make this more flexible. right now it assumes the COG-based library lives at
-                    // 0x100. Eventually we want to mark any function/variable as being able to live in the cog.
-                    inst += ((val-0x100)/4) & 0x1ff;
+                    // TODO: make this more flexible. Eventually we want to mark any function/variable as being able to live in the cog.
+
+                    // Assumption: libcalls are placed at 0x200 in hub ram. Convert it to a lut address by removing the offset of the hubram address
+                    // divindg by 4 to convert to a cog address, and add 0x200 to get to the LUT address
+                    inst += (((val-0x200)/4) & 0x1ff) + 0x200;
                     LLVM_DEBUG(outs() << "cog function relocation\n");
                     LLVM_DEBUG(outs() << "original value is " << (int)val << "\n");
-                    LLVM_DEBUG(outs() << "adjusted value is " << (int)(((val-0x100)/4) & 0x1ff) << "\n");
+                    LLVM_DEBUG(outs() << "adjusted value is " << (int)((((val-0x200)/4) & 0x1ff) + 0x200) << "\n");
                     write32le(loc, inst);
                     break;
                 }

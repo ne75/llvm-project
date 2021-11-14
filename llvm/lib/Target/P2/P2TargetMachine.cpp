@@ -38,28 +38,18 @@ P2TargetMachine::P2TargetMachine(const Target &T, const Triple &TT, StringRef CP
                                      Optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT) :
                         LLVMTargetMachine(T, "e-p:32:32-i32:32", TT, CPU, FS, Options, Reloc::Static, CodeModel::Small, OL),
                         TLOF(std::make_unique<P2TargetObjectFile>()),
-                        hubex_subtarget(TT, std::string(CPU), std::string(FS), *this, false),
-                        cogex_subtarget(TT, std::string(CPU), std::string(FS), *this, true) {
-
+                        subtarget(TT, std::string(CPU), std::string(FS), *this) {
     initAsmInfo();
 }
 
 P2TargetMachine::~P2TargetMachine() {}
 
 const P2Subtarget *P2TargetMachine::getSubtargetImpl() const {
-    return &hubex_subtarget;
+    return &subtarget;
 }
 
 const P2Subtarget *P2TargetMachine::getSubtargetImpl(const Function &F) const {
-
-    bool is_cog_func = F.hasFnAttribute(Attribute::Cogtext) || F.hasFnAttribute(Attribute::Cogmain);
-
-    if (is_cog_func) {
-        LLVM_DEBUG(errs() << "--- this is a cog function\n");
-        return &cogex_subtarget;
-    }
-
-    return &hubex_subtarget;
+    return &subtarget;
 }
 
 namespace {
