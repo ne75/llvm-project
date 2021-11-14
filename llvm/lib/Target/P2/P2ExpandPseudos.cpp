@@ -41,7 +41,6 @@ namespace {
 
         void expand_QUDIV(MachineFunction &MF, MachineBasicBlock::iterator SII);
         void expand_QUREM(MachineFunction &MF, MachineBasicBlock::iterator SII);
-        void expand_MOVri32(MachineFunction &MF, MachineBasicBlock::iterator SII);
         void expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::iterator SII);
     };
 
@@ -81,49 +80,6 @@ void P2ExpandPseudos::expand_QUREM(MachineFunction &MF, MachineBasicBlock::itera
             .addReg(P2::QY)
             .addImm(P2::ALWAYS)
             .addImm(P2::NOEFF);
-
-    SI.eraseFromParent();
-}
-
-void P2ExpandPseudos::expand_MOVri32(MachineFunction &MF, MachineBasicBlock::iterator SII) {
-    MachineInstr &SI = *SII;
-
-    LLVM_DEBUG(errs()<<"== lower pseudo mov i32imm\n");
-    LLVM_DEBUG(errs() << "operand type = " << (unsigned)SI.getOperand(1).getType() << "\n");
-
-    if (SI.getOperand(1).isGlobal()) {
-        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::AUGS))
-            .addImm(0)  // we will encode the correct value into this later. if just printing assembly,
-                        // the final optimization pass should remove this instruction (TODO)
-                        // as a result, the exact printing of this instruction won't be correct
-            .addImm(P2::ALWAYS);
-        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::MOVri), SI.getOperand(0).getReg())
-            .addGlobalAddress(SI.getOperand(1).getGlobal())
-            .addImm(P2::ALWAYS).addImm(P2::NOEFF);
-
-    } else if (SI.getOperand(1).isJTI()) {
-        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::AUGS))
-            .addImm(0)  // we will encode the correct value into this later. if just printing assembly,
-                        // the final optimization pass should remove this instruction (TODO)
-                        // as a result, the exact printing of this instruction won't be correct
-            .addImm(P2::ALWAYS);
-        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::MOVri), SI.getOperand(0).getReg())
-            .addJumpTableIndex(SI.getOperand(1).getIndex())
-            .addImm(P2::ALWAYS).addImm(P2::NOEFF);
-
-    } else {
-        // TODO: only do this replacement if the target operand is used only once. 
-        uint32_t imm = SI.getOperand(1).getImm();
-
-        // expand into an AUGS for the top 23 bits of the immediate and MOVri for the lower 9 bits
-        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::AUGS))
-            .addImm(imm>>9)
-            .addImm(P2::ALWAYS);
-
-        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::MOVri), SI.getOperand(0).getReg())
-            .addImm(imm&0x1ff)
-            .addImm(P2::ALWAYS).addImm(P2::NOEFF);
-    }
 
     SI.eraseFromParent();
 }

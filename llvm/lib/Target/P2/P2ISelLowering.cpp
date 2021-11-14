@@ -303,12 +303,17 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                 arg_size = 4; 
 
             int off = (NextStackOffset-VA.getLocMemOffset()-arg_size);
+            SDValue PtrOff;
             LLVM_DEBUG(errs() << "stack offset for argument: " << off << "\n");
-            EVT vt = getPointerTy(DAG.getDataLayout());
-            SDValue cond = DAG.getTargetConstant(P2::ALWAYS, DL, MVT::i32);
-            SDValue eff = DAG.getTargetConstant(P2::NOEFF, DL, MVT::i32);
-            SDValue ops[] = {StackPtr, DAG.getConstant(off, DL, MVT::i32, true), cond, eff};
-            SDValue PtrOff = SDValue(DAG.getMachineNode(P2::ADDri, DL, vt, ops), 0);
+            if (off == 0) {
+                PtrOff = StackPtr;
+            } else {
+                EVT vt = getPointerTy(DAG.getDataLayout());
+                SDValue cond = DAG.getTargetConstant(P2::ALWAYS, DL, MVT::i32);
+                SDValue eff = DAG.getTargetConstant(P2::NOEFF, DL, MVT::i32);
+                SDValue ops[] = {StackPtr, DAG.getConstant(off, DL, MVT::i32, true), cond, eff};
+                PtrOff = SDValue(DAG.getMachineNode(P2::ADDri, DL, vt, ops), 0);
+            }
 
             if (Flags.isByVal()) {
                 LLVM_DEBUG(errs() << "Argument is byval of size " << Flags.getByValSize() << "\n");
