@@ -45,7 +45,7 @@ namespace llvm {
         }
 
         virtual bool runOnMachineFunction(MachineFunction &MF) override;
-
+        
         void printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostream &O);
         bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNum, const char *ExtraCode, raw_ostream &O) override;
         bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNum, const char *ExtraCode, raw_ostream &O) override;
@@ -56,9 +56,6 @@ namespace llvm {
         void emitFunctionBodyStart() override;
         void emitFunctionBodyEnd() override;
         void emitStartOfAsmFile(Module &M) override;
-
-        void emitInlineAsmStart() const override;
-        void emitInlineAsmEnd(const MCSubtargetInfo &StartInfo, const MCSubtargetInfo *EndInfo) const override;
     };
 }
 

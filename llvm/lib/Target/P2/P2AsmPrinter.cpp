@@ -53,6 +53,8 @@ bool P2AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
 }
 
 void P2AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostream &O) {
+    // TODO: for rd/wrlong/word/byte instructions, print out the special immediate as a string instead of 
+    // as a plane immediate. That will require the reverse to be parsed in AsmParser as well...
     const MachineOperand &MO = MI->getOperand(OpNo);
 
     switch (MO.getType()) {
@@ -147,14 +149,6 @@ void P2AsmPrinter::emitFunctionBodyStart() {
 
 void P2AsmPrinter::emitFunctionBodyEnd() {}
 void P2AsmPrinter::emitStartOfAsmFile(Module &M) {}
-
-void P2AsmPrinter::emitInlineAsmStart() const {
-    LLVM_DEBUG(errs() << "*** EMIT INLINE ASM START\n");
-}
-
-void P2AsmPrinter::emitInlineAsmEnd(const MCSubtargetInfo &StartInfo, const MCSubtargetInfo *EndInfo) const {
-    LLVM_DEBUG(errs() << "*** EMIT INLINE ASM END\n");
-}
 
 // Force static initialization.
 extern "C" void LLVMInitializeP2AsmPrinter() {

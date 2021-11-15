@@ -109,12 +109,17 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
 
     assert(offset >= 0 && "Invalid offset"); // offset should be positive or 0
 
-    int op = MI.getOpcode();
+    // if we have rr/ir read or writes, those can be changed to ri/ii and use offsets below. FrameIndex is always using 
+    // PTRA, so it's safe to do that, as the last instruction can never be a register. 
+    if (MI.getOpcode() == P2::WRLONGrr) MI.setDesc(inst_info.get(P2::WRLONGri));
+    if (MI.getOpcode() == P2::WRLONGir) MI.setDesc(inst_info.get(P2::WRLONGii));
+    if (MI.getOpcode() == P2::RDLONGrr) MI.setDesc(inst_info.get(P2::RDLONGri));
 
     // if the op code using the frame index is rdlong or wrlong, we can use a special immediate to read/write PTRA
     // bool can_use_ptr_off = (op == P2::WRLONGri) || (op == P2::RDLONGri);
 
-    if (MI.getOpcode() == P2::FRMIDX) {
+    int op = MI.getOpcode();
+    if (op == P2::FRMIDX) {
         MI.setDesc(inst_info.get(P2::MOVrr)); // change our psesudo instruction to a mov
         MI.getOperand(FIOperandNum).ChangeToRegister(P2::PTRA, false); // change the abstract frame index register to our real stack pointer register
         MI.addOperand(MachineOperand::CreateImm(P2::ALWAYS));
@@ -128,33 +133,40 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
                                 .addImm(offset)
                                 .addImm(P2::ALWAYS)
                                 .addImm(P2::NOEFF);
-    } else if ((op == P2::WRLONGri) || (op == P2::RDLONGri)) {
-        int imm = 0x4;
+    } else if ((op == P2::WRLONGri) || (op == P2::RDLONGri) || (op == P2::WRLONGii)) {
+        int imm = 0x8;
+        offset *= -1;
 
         // offset can be up to 128, since the index for the special immediate is scaled by 4 when using rdlong/wrlong
         // later we can make this more generic for bytes and words too--adjusting the scale appropriately
-        if (offset > 128) {
+        if (offset/4 > 31 || offset/4 < -32) {
             imm <<= 20;
-            imm += ((1<<20) - offset/4) & 0xfffff;
+            imm += (offset) & 0xfffff; // offset is unscaled when using augs
 
-            BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::AUGS)).addImm(imm >> 9);
+            BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::AUGS))
+                .addImm(imm >> 9)
+                .addImm(P2::ALWAYS);
+
             MI.getOperand(1).ChangeToImmediate(imm & 0x1ff);
         } else {
-            imm <<= 6;
-            imm += ((1<<6) - offset/4) & 0x3f;
+            imm <<= 5;
+            imm += (offset/4) & 0x3f;
 
             MI.getOperand(1).ChangeToImmediate(imm & 0x1ff);
         }
 
+        LLVM_DEBUG(MI.dump());
     } else {
         // if we decide we need to scavange registers, we need to create an emergency stack slock in frame lowering,
-        // then make sure to kill the register after it is used here. For now, we can just use PTRB as a second stack pointer
+        // then make sure to kill the register after it is used here. For now, we can just use PA as a second stack pointer
         // register for writing to this frame index
+        // Not sure this section of code ever gets used anymore, but leaving it just in case
 
         Register reg = P2::PA;
 
         auto inst = II->getPrevNode();
-        if (inst && (inst->getOpcode() == P2::SETQr || inst->getOpcode() == P2::SETQi)) {
+        if (inst && (inst->getOpcode() == P2::SETQr || inst->getOpcode() == P2::SETQi || 
+                    inst->getOpcode() == P2::SETQ2r || inst->getOpcode() == P2::SETQ2i)) {
             // if we have a setq before the instruction with the frame index, back up so keep the setq next to the
             // desired instruction
             LLVM_DEBUG(errs() << "have a setq, backing up by one instruction\n");
