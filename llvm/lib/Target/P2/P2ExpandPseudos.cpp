@@ -39,6 +39,10 @@ namespace {
         const P2InstrInfo *TII;
         const P2TargetMachine &TM;
 
+        void expand_RDDLONG(MachineFunction &MF, MachineBasicBlock::iterator SII);
+        void expand_WRDLONG(MachineFunction &MF, MachineBasicBlock::iterator SII);
+        void expand_ADD64(MachineFunction &MF, MachineBasicBlock::iterator SII);
+        void expand_SUB64(MachineFunction &MF, MachineBasicBlock::iterator SII);
         void expand_QUDIV(MachineFunction &MF, MachineBasicBlock::iterator SII);
         void expand_QUREM(MachineFunction &MF, MachineBasicBlock::iterator SII);
         void expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::iterator SII);
@@ -47,6 +51,132 @@ namespace {
     char P2ExpandPseudos::ID = 0;
 
 } // end anonymous namespace
+
+void P2ExpandPseudos::expand_ADD64(MachineFunction &MF, MachineBasicBlock::iterator SII) {
+    MachineInstr &SI = *SII;
+
+    auto dest = SI.getOperand(0);
+    auto op1 = SI.getOperand(1);
+    auto op2 = SI.getOperand(2);
+
+    if (op2.isImm()) {
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::ADDri))
+            .addReg(dest.getReg(), RegState::Define, P2::gsub0)
+            .addReg(op1.getReg(), RegState::Kill, P2::gsub0)
+            .addImm(op2.getImm() & 0xffffffff)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::ADDXri))
+            .addReg(dest.getReg(), RegState::Define, P2::gsub1)
+            .addReg(op1.getReg(), RegState::Kill, P2::gsub1)
+            .addImm(op2.getImm() >> 32)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    } else {
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::ADDrr))
+            .addReg(dest.getReg(), RegState::Define, P2::gsub0)
+            .addReg(op1.getReg(), 0, P2::gsub0)
+            .addReg(op2.getReg(), 0, P2::gsub0)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::ADDXrr))
+            .addReg(dest.getReg(), RegState::Define, P2::gsub1)
+            .addReg(op1.getReg(), RegState::Kill, P2::gsub1)
+            .addReg(op2.getReg(), RegState::Kill, P2::gsub1)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    }
+
+    SI.eraseFromParent();
+}
+
+void P2ExpandPseudos::expand_SUB64(MachineFunction &MF, MachineBasicBlock::iterator SII) {
+    MachineInstr &SI = *SII;
+
+    auto dest = SI.getOperand(0);
+    auto op1 = SI.getOperand(1);
+    auto op2 = SI.getOperand(2);
+
+    if (op2.isImm()) {
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::SUBri))
+            .addReg(dest.getReg(), RegState::Define, P2::gsub0)
+            .addReg(op1.getReg(), RegState::Kill, P2::gsub0)
+            .addImm(op2.getImm() & 0xffffffff)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::SUBXri))
+            .addReg(dest.getReg(), RegState::Define, P2::gsub1)
+            .addReg(op1.getReg(), RegState::Kill, P2::gsub1)
+            .addImm(op2.getImm() >> 32)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    } else {
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::SUBrr))
+            .addReg(dest.getReg(), RegState::Define, P2::gsub0)
+            .addReg(op1.getReg(), 0, P2::gsub0)
+            .addReg(op2.getReg(), RegState::Kill, P2::gsub0)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::SUBXrr))
+            .addReg(dest.getReg(), RegState::Define, P2::gsub1)
+            .addReg(op1.getReg(), 0, P2::gsub1)
+            .addReg(op2.getReg(), RegState::Kill, P2::gsub1)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    }
+
+    SI.eraseFromParent();
+}
+
+void P2ExpandPseudos::expand_RDDLONG(MachineFunction &MF, MachineBasicBlock::iterator SII) {
+    MachineInstr &SI = *SII;
+
+    BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::SETQi))
+            .addImm(2)
+            .addImm(P2::ALWAYS);
+
+    if (SI.getOperand(1).isImm()) {
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::RDLONGri))
+            .addReg(SI.getOperand(0).getReg(), RegState::Define, P2::gsub0)
+            .add(SI.getOperand(1))
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    } else {
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::RDLONGrr))
+            .addReg(SI.getOperand(0).getReg(), RegState::Define, P2::gsub0)
+            .add(SI.getOperand(1))
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    }
+
+    SI.eraseFromParent();
+}
+
+void P2ExpandPseudos::expand_WRDLONG(MachineFunction &MF, MachineBasicBlock::iterator SII) {
+    MachineInstr &SI = *SII;
+
+    BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::SETQi))
+            .addImm(2)
+            .addImm(P2::ALWAYS);
+
+    if (SI.getOperand(1).isImm()) {
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::WRLONGri))
+            .addReg(SI.getOperand(0).getReg(), RegState::Kill, P2::gsub0)
+            .add(SI.getOperand(1))
+            .addImm(P2::ALWAYS);
+    } else {
+        BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::WRLONGrr))
+            .addReg(SI.getOperand(0).getReg(), RegState::Kill, P2::gsub0)
+            .add(SI.getOperand(1))
+            .addImm(P2::ALWAYS);
+    }
+
+    SI.eraseFromParent();
+}
 
 void P2ExpandPseudos::expand_QUDIV(MachineFunction &MF, MachineBasicBlock::iterator SII) {
     MachineInstr &SI = *SII;
@@ -217,6 +347,18 @@ bool P2ExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
                     break;
                 case P2::SELECTCC:
                     expand_SELECTCC(MF, MBBI);
+                    break;
+                case P2::RDDLONG:
+                    expand_RDDLONG(MF, MBBI);
+                    break;
+                case P2::WRDLONG:
+                    expand_WRDLONG(MF, MBBI);
+                    break;
+                case P2::ADD64:
+                    expand_ADD64(MF, MBBI);
+                    break;
+                case P2::SUB64:
+                    expand_SUB64(MF, MBBI);
                     break;
             }
 

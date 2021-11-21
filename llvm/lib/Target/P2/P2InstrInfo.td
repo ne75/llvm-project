@@ -39,6 +39,7 @@ def calltarget : Operand<iPTR> {
 
 def NegateImm : SDNodeXForm<imm, [{return CurDAG->getConstant(-N->getSExtValue(), SDLoc(N), MVT::i32, true);}]>;
 def NegSubInlineConst32 : ImmLeaf<i32, [{return Imm < 0;}], NegateImm>;
+def i32immleaf : ImmLeaf<i32, [{return isInt<32>(Imm);}]>;
 
 def addr : ComplexPattern<iPTR, 1, "selectAddr", [], []>;
 
@@ -115,37 +116,46 @@ let Constraints = "$s = $d" in {
 
 defm ENCOD  : P2InstCZIDSm<0b0111100, (ins), "encod">;
 
+// 64 bit pseudos
+let Constraints = "$s1 = $d" in {
+    def ADD64   : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s, P2GPRPair:$s1), "add64 $d, $s">;
+    def SUB64   : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s, P2GPRPair:$s1), "sub64 $d, $s">;
+}
+
 def : Pat<(rotl P2GPR:$src1, P2GPR:$s), (ROLrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(rotl P2GPR:$src1, imm:$s), (ROLri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(rotl P2GPR:$src1, i32immleaf:$s), (ROLri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(rotr P2GPR:$src1, P2GPR:$s), (RORrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(rotr P2GPR:$src1, imm:$s), (RORri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(rotr P2GPR:$src1, i32immleaf:$s), (RORri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(srl P2GPR:$src1, P2GPR:$s), (SHRrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(srl P2GPR:$src1, imm:$s), (SHRri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(srl P2GPR:$src1, i32immleaf:$s), (SHRri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(shl P2GPR:$src1, P2GPR:$s), (SHLrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(shl P2GPR:$src1, imm:$s), (SHLri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(shl P2GPR:$src1, i32immleaf:$s), (SHLri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(sra P2GPR:$src1, P2GPR:$s), (SARrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(sra P2GPR:$src1, imm:$s), (SARri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(sra P2GPR:$src1, i32immleaf:$s), (SARri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(add P2GPR:$src1, P2GPR:$s), (ADDrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(add P2GPR:$src1, imm:$s), (ADDri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(add P2GPR:$src1, i32immleaf:$s), (ADDri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(add P2GPR:$src1, P2GPR:$s), (ADDXrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(add P2GPR:$src1, imm:$s), (ADDXri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(add P2GPR:$src1, i32immleaf:$s), (ADDXri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(and P2GPR:$src1, P2GPR:$s), (ANDrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(and P2GPR:$src1, imm:$s), (ANDri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(and P2GPR:$src1, i32immleaf:$s), (ANDri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(or P2GPR:$src1, P2GPR:$s), (ORrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(or P2GPR:$src1, imm:$s), (ORri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(or P2GPR:$src1, i32immleaf:$s), (ORri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(xor P2GPR:$src1, P2GPR:$s), (XORrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(xor P2GPR:$src1, imm:$s), (XORri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(xor P2GPR:$src1, i32immleaf:$s), (XORri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(not P2GPR:$s), (NOTrr P2GPR:$s, always, noeff)>;
-def : Pat<(not imm:$s), (NOTri imm:$s, always, noeff)>;
+def : Pat<(not i32immleaf:$s), (NOTri imm:$s, always, noeff)>;
 def : Pat<(abs P2GPR:$s), (ABSrr P2GPR:$s, always, noeff)>;
-def : Pat<(abs imm:$s), (ABSri imm:$s, always, noeff)>;
+def : Pat<(abs i32immleaf:$s), (ABSri imm:$s, always, noeff)>;
 def : Pat<(ineg P2GPR:$s), (NEGrr P2GPR:$s, always, noeff)>;
-def : Pat<(ineg imm:$s), (NEGri imm:$s, always, noeff)>;
+def : Pat<(ineg i32immleaf:$s), (NEGri imm:$s, always, noeff)>;
 def : Pat<(bitreverse P2GPR:$s), (REV P2GPR:$s, always)>;
 
 def : Pat<(sext_inreg P2GPR:$d, i1), (SIGNXri P2GPR:$d, 0, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i8), (SIGNXri P2GPR:$d, 7, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i16), (SIGNXri P2GPR:$d, 15, always, noeff)>;
+
+// def : Pat<(add i64:$s, i64:$s1), (ADD64 i64:$s, i64:$s1)>;
+// def : Pat<(sub i64:$s, i64:$s1), (SUB64 i64:$s, i64:$s1)>;
 
 /*--------------------------------*/
 /* More complicated math          */
@@ -340,21 +350,27 @@ def WFWORDi     : P2InstLD<0b1101011, 0b000010110, 0b1, (outs i32imm:$d), (ins),
 def WFLONGr     : P2InstLD<0b1101011, 0b000010111, 0b0, (outs P2GPR:$d), (ins), "wflong $d">;
 def WFLONGi     : P2InstLD<0b1101011, 0b000010111, 0b1, (outs i32imm:$d), (ins), "wflong #$d">;
 
+def RDDLONG     : Pseudo<(outs P2GPRPair:$reg), (ins P2GPR:$addr), "rddlong $reg, $addr">;
+def WRDLONG     : Pseudo<(outs), (ins P2GPRPair:$reg, P2GPR:$addr), "wrdlong $reg, $addr">;
+
+def : Pat<(i64 (load addr:$s)), (RDDLONG P2GPR:$s)>;
+
 def : Pat<(zextloadi8 imm:$s), (RDBYTEri imm:$s, always, noeff)>;
 def : Pat<(zextloadi8 addr:$s), (RDBYTErr P2GPR:$s, always, noeff)>;
 def : Pat<(zextloadi16 imm:$s), (RDWORDri imm:$s, always, noeff)>;
 def : Pat<(zextloadi16 addr:$s), (RDWORDrr P2GPR:$s, always, noeff)>;
 def : Pat<(load imm:$s), (RDLONGri imm:$s, always, noeff)>;
-def : Pat<(load addr:$s), (RDLONGrr P2GPR:$s, always, noeff)>;
+def : Pat<(i32 (load addr:$s)), (RDLONGrr P2GPR:$s, always, noeff)>;
 
 def : Pat<(truncstorei8 P2GPR:$d, addr:$s), (WRBYTErr P2GPR:$d, P2GPR:$s, always)>;
-def : Pat<(truncstorei8 imm:$d, addr:$s), (WRBYTEir imm:$d, P2GPR:$s, always)>;
+def : Pat<(truncstorei8 i32immleaf:$d, addr:$s), (WRBYTEir imm:$d, P2GPR:$s, always)>;
 def : Pat<(truncstorei16 P2GPR:$d, addr:$s), (WRWORDrr P2GPR:$d, P2GPR:$s, always)>;
-def : Pat<(truncstorei16 imm:$d, addr:$s), (WRWORDir imm:$d, P2GPR:$s, always)>;
+def : Pat<(truncstorei16 i32immleaf:$d, addr:$s), (WRWORDir imm:$d, P2GPR:$s, always)>;
 def : Pat<(store P2GPR:$d, imm:$s), (WRLONGri P2GPR:$d, imm:$s, always)>;
-def : Pat<(store imm:$d, imm:$s), (WRLONGii imm:$d, imm:$s, always)>;
+def : Pat<(store i32immleaf:$d, imm:$s), (WRLONGii imm:$d, imm:$s, always)>;
 def : Pat<(store P2GPR:$d, addr:$s), (WRLONGrr P2GPR:$d, P2GPR:$s, always)>;
-def : Pat<(store imm:$d, addr:$s), (WRLONGir imm:$d, P2GPR:$s, always)>;
+def : Pat<(store i32immleaf:$d, addr:$s), (WRLONGir imm:$d, P2GPR:$s, always)>;
+def : Pat<(store i64:$d, addr:$s), (WRDLONG P2GPRPair:$d, P2GPR:$s)>;
 
 def : Pat<(extloadi8 addr:$s), (RDBYTErr P2GPR:$s, always, noeff)>;
 def : Pat<(extloadi16 addr:$s), (RDWORDrr P2GPR:$s, always, noeff)>;

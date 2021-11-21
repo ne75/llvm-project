@@ -75,10 +75,18 @@ const char *P2TargetLowering::getTargetNodeName(unsigned Opcode) const {
 
 P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(TM), target_machine(TM) {
     addRegisterClass(MVT::i32, &P2::P2GPRRegClass);
+    addRegisterClass(MVT::i64, &P2::P2GPRPairRegClass);
 
     //  computeRegisterProperties - Once all of the register classes are
     //  added, this allows us to compute derived properties we expose.
     computeRegisterProperties(TM.getRegisterInfo());
+
+    // for (unsigned Op = 0; Op < ISD::BUILTIN_OP_END; ++Op) {
+    //     setOperationAction(Op, MVT::i64, Expand);
+    // }
+
+    setOperationAction(ISD::LOAD, MVT::i64, Legal);
+    setOperationAction(ISD::STORE, MVT::i64, Legal);
 
     // See https://llvm.org/doxygen/TargetLowering_8h_source.html#l00192 for the various action
     setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
@@ -120,6 +128,12 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::SDIV, MVT::i32, Expand);
     setOperationAction(ISD::SREM, MVT::i32, Expand);
     setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
+
+    // 64 bit support
+    setOperationAction(ISD::ADD, MVT::i64, Custom);
+    setOperationAction(ISD::MUL, MVT::i64, LibCall);
+    setOperationAction(ISD::SDIV, MVT::i64, LibCall);
+    setOperationAction(ISD::SREM, MVT::i64, LibCall);
 
     // setup all the functions that will be libcalls.
     setLibcallName(RTLIB::SDIV_I32, "__sdiv");
@@ -180,6 +194,12 @@ SDValue P2TargetLowering::lowerJumpTable(SDValue Op, SelectionDAG &DAG) const {
     auto *N = cast<JumpTableSDNode>(Op);
     SDValue GA = DAG.getTargetJumpTable(N->getIndex(), MVT::i32);
     return DAG.getNode(P2ISD::GAWRAPPER, SDLoc(N), MVT::i32, GA);
+}
+
+SDValue P2TargetLowering::lowerADD64(SDValue Op, SelectionDAG &DAG) const {
+    SDNode *node = Op.getNode();
+    EVT VT = Node->getValueType(0);
+    SDValue Chain = Node->getOperand(0);
 }
 
 #include "P2GenCallingConv.inc"

@@ -36,7 +36,7 @@ namespace llvm {
             // call subroutine
             CALL,
 
-            // global address rapper
+            // global address wrapper
             GAWRAPPER
         };
 
@@ -139,6 +139,7 @@ namespace llvm {
         SDValue lowerVASTART(SDValue Op, SelectionDAG &DAG) const;
         SDValue lowerVAARG(SDValue Op, SelectionDAG &DAG) const;
         SDValue lowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
+        SDValue lowerADD64(SDValue Op, SelectionDAG &DAG) const;
     };
 }
 
