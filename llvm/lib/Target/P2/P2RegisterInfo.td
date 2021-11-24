@@ -26,8 +26,8 @@ class P2Reg<bits<9> Enc, string n> : Register<n> {
 
 // define some artifical 64 bit registers for 64 bit operations
 let Namespace = "P2" in {
-    def gsub0 : SubRegIndex<32>;
-    def gsub1 : SubRegIndex<32, 32>;
+    def sub0 : SubRegIndex<32>;
+    def sub1 : SubRegIndex<32, 32>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -101,7 +101,15 @@ let Namespace = "P2" in {
     }
 }
 
-let SubRegIndices = [gsub0, gsub1], CoveredBySubRegs = 1 in {
+let SubRegIndices = [sub0, sub1], CoveredBySubRegs = 1, Namespace = "P2" in {
+    def R0_R1 : RegisterWithSubRegs<"r0:r1", [R0, R1]>;
+    def R2_R3 : RegisterWithSubRegs<"r2:r3", [R2, R3]>;
+    def R4_R5 : RegisterWithSubRegs<"r4:r5", [R4, R5]>;
+    def R6_R7 : RegisterWithSubRegs<"r6:r7", [R6, R7]>;
+    def R8_R9 : RegisterWithSubRegs<"r8:r9", [R8, R9]>;
+    def R10_R11 : RegisterWithSubRegs<"r10:r11", [R10, R11]>;
+    def R12_R13 : RegisterWithSubRegs<"r12:r13", [R12, R13]>;
+    def R14_R15 : RegisterWithSubRegs<"r14:r15", [R14, R15]>;
     def R16_R17 : RegisterWithSubRegs<"r16:r17", [R16, R17]>;
     def R18_R19 : RegisterWithSubRegs<"r18:r19", [R18, R19]>;
     def R20_R21 : RegisterWithSubRegs<"r20:r21", [R20, R21]>;
@@ -131,7 +139,9 @@ def P2GPR : RegisterClass<"P2", [i32], 32, (add
     DIRA, DIRB, OUTA, OUTB, INA, INB
 )>;
 
-def P2GPRPair : RegisterClass<"P2", [i64], 64, (add R16_R17, R18_R19, R20_R21, R22_R23,
+def P2GPRPair : RegisterClass<"P2", [i64], 64, (add R0_R1, R2_R3, R4_R5, R6_R7,
+                                                    R8_R9, R10_R11, R12_R13, R14_R15,
+                                                    R16_R17, R18_R19, R20_R21, R22_R23,
                                                     R24_R25, R26_R27, R28_R29, R30_R31)>;
 
 def P2Implicit : RegisterClass<"P2", [i32], 32, (add SW, QX, QY, N)>;

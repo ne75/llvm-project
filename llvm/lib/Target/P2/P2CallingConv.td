@@ -19,7 +19,7 @@ def CC_P2 : CallingConv<[
     // Fall-back, and use the stack, stack slot is 4 bytes wide and byte aligned.
     CCIfType<[i32], CCAssignToStack<4, 1>>,
     // 64 bit arguments are passed via register pairs
-    CCIfType<[i64], CCAssignToReg<[R16_R17, R18_R19]>>,
+    CCIfType<[i64], CCAssignToReg<[R0_R1, R2_R3]>>,
     // and as a fallback, via the stack
     CCIfType<[i64], CCAssignToStack<8, 1>>
 ]>;
