@@ -34,7 +34,7 @@ namespace llvm {
     class P2MCCodeEmitter : public MCCodeEmitter {
         P2MCCodeEmitter(const P2MCCodeEmitter &) = delete;
         void operator=(const P2MCCodeEmitter &) = delete;
-        // const MCInstrInfo &MCII;
+        const MCInstrInfo &MCII;
         MCContext &Ctx;
 
         /**

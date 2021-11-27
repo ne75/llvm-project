@@ -230,6 +230,8 @@ bool P2MCCodeEmitter::is_rtlib(const MCSymbol &sym) const {
         #define HANDLE_LIBCALL(code, name) name,
         #include "llvm/IR/RuntimeLibcalls.def"
         #undef HANDLE_LIBCALL
+        // add non-standard libcalls here
+        "__udivmoddi4"
     };
 
     ArrayRef<const char*> libCallRoutinesList = makeArrayRef(libcallRoutineNames);
