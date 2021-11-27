@@ -39,6 +39,8 @@ def calltarget : Operand<iPTR> {
 
 def NegateImm : SDNodeXForm<imm, [{return CurDAG->getConstant(-N->getSExtValue(), SDLoc(N), MVT::i32, true);}]>;
 def NegSubInlineConst32 : ImmLeaf<i32, [{return Imm < 0;}], NegateImm>;
+def i32immleaf : ImmLeaf<i32, [{return isInt<32>(Imm);}]>;
+def i64immleaf : ImmLeaf<i64, [{return isInt<64>(Imm);}]>;
 
 def addr : ComplexPattern<iPTR, 1, "selectAddr", [], []>;
 
@@ -97,6 +99,7 @@ let Constraints = "$s1 = $d", s_num = 2 in {
     defm SUBX   : P2InstCZIDSm<0b0001101, (ins P2GPR:$s1), "subx">;
     defm SUBS   : P2InstCZIDSm<0b0001110, (ins P2GPR:$s1), "subs">;
     defm SUBSX  : P2InstCZIDSm<0b0001111, (ins P2GPR:$s1), "subsx">;
+    defm SUBR   : P2InstCZIDSm<0b0010110, (ins P2GPR:$s1), "subr">;
     defm AND    : P2InstCZIDSm<0b0101000, (ins P2GPR:$s1), "and">;
     defm OR     : P2InstCZIDSm<0b0101010, (ins P2GPR:$s1), "or">;
     defm XOR    : P2InstCZIDSm<0b0101011, (ins P2GPR:$s1), "xor">;
@@ -114,39 +117,81 @@ let Constraints = "$s = $d" in {
 }
 
 defm ENCOD  : P2InstCZIDSm<0b0111100, (ins), "encod">;
+defm DECOD  : P2InstIDSm<0b100111000, "decod">;
+defm ONES   : P2InstCZIDSm<0b0111101, (ins), "ones">;
+
+// 64 bit pseudos
+let Constraints = "$s1 = $d" in {
+    def ADD64rr     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, P2GPRPair:$s), "add64 $d, $s">;
+    def SUB64rr     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, P2GPRPair:$s), "sub64 $d, $s">;
+    def AND64rr     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, P2GPRPair:$s), "and64 $d, $s">;
+    def OR64rr      : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, P2GPRPair:$s), "or64 $d, $s">;
+    def XOR64rr     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, P2GPRPair:$s), "xor64 $d, $s">;
+
+    def ADD64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "add64 $d, $s">;
+    def SUB64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "sub64 $d, $s">;
+    def AND64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "and64 $d, $s">;
+    def OR64ri      : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "or64 $d, $s">;
+    def XOR64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "xor64 $d, $s">;
+
+    def SEXTIR64    : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, i8imm:$s), "sextir64 $d, #$s">;
+}
+
+def SEXT64      : Pseudo<(outs P2GPRPair:$d), (ins P2GPR:$s), "sext64 $d, $s">;
+def ZEXT64      : Pseudo<(outs P2GPRPair:$d), (ins P2GPR:$s), "zext64 $d, $s">;
 
 def : Pat<(rotl P2GPR:$src1, P2GPR:$s), (ROLrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(rotl P2GPR:$src1, imm:$s), (ROLri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(rotl P2GPR:$src1, i32immleaf:$s), (ROLri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(rotr P2GPR:$src1, P2GPR:$s), (RORrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(rotr P2GPR:$src1, imm:$s), (RORri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(rotr P2GPR:$src1, i32immleaf:$s), (RORri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(srl P2GPR:$src1, P2GPR:$s), (SHRrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(srl P2GPR:$src1, imm:$s), (SHRri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(srl P2GPR:$src1, i32immleaf:$s), (SHRri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(shl P2GPR:$src1, P2GPR:$s), (SHLrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(shl P2GPR:$src1, imm:$s), (SHLri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(shl P2GPR:$src1, i32immleaf:$s), (SHLri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(sra P2GPR:$src1, P2GPR:$s), (SARrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(sra P2GPR:$src1, imm:$s), (SARri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(sra P2GPR:$src1, i32immleaf:$s), (SARri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(add P2GPR:$src1, P2GPR:$s), (ADDrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(add P2GPR:$src1, imm:$s), (ADDri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(add P2GPR:$src1, i32immleaf:$s), (ADDri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(add P2GPR:$src1, P2GPR:$s), (ADDXrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(add P2GPR:$src1, imm:$s), (ADDXri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(add P2GPR:$src1, i32immleaf:$s), (ADDXri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(and P2GPR:$src1, P2GPR:$s), (ANDrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(and P2GPR:$src1, imm:$s), (ANDri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(and P2GPR:$src1, i32immleaf:$s), (ANDri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(or P2GPR:$src1, P2GPR:$s), (ORrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(or P2GPR:$src1, imm:$s), (ORri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(or P2GPR:$src1, i32immleaf:$s), (ORri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(xor P2GPR:$src1, P2GPR:$s), (XORrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(xor P2GPR:$src1, imm:$s), (XORri P2GPR:$src1, imm:$s, always, noeff)>;
+def : Pat<(xor P2GPR:$src1, i32immleaf:$s), (XORri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(not P2GPR:$s), (NOTrr P2GPR:$s, always, noeff)>;
-def : Pat<(not imm:$s), (NOTri imm:$s, always, noeff)>;
+def : Pat<(not i32immleaf:$s), (NOTri imm:$s, always, noeff)>;
 def : Pat<(abs P2GPR:$s), (ABSrr P2GPR:$s, always, noeff)>;
-def : Pat<(abs imm:$s), (ABSri imm:$s, always, noeff)>;
+def : Pat<(abs i32immleaf:$s), (ABSri imm:$s, always, noeff)>;
 def : Pat<(ineg P2GPR:$s), (NEGrr P2GPR:$s, always, noeff)>;
-def : Pat<(ineg imm:$s), (NEGri imm:$s, always, noeff)>;
+def : Pat<(ineg i32immleaf:$s), (NEGri imm:$s, always, noeff)>;
 def : Pat<(bitreverse P2GPR:$s), (REV P2GPR:$s, always)>;
 
 def : Pat<(sext_inreg P2GPR:$d, i1), (SIGNXri P2GPR:$d, 0, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i8), (SIGNXri P2GPR:$d, 7, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i16), (SIGNXri P2GPR:$d, 15, always, noeff)>;
 
+// basic 64 bit support. everything else should either expand or be a libcall
+def : Pat<(add P2GPRPair:$s1, P2GPRPair:$s), (ADD64rr P2GPRPair:$s1, P2GPRPair:$s)>;
+def : Pat<(add P2GPRPair:$s1, i64immleaf:$s), (ADD64ri P2GPRPair:$s1, imm:$s)>;
+def : Pat<(sub P2GPRPair:$s1, P2GPRPair:$s), (SUB64rr P2GPRPair:$s1, P2GPRPair:$s)>;
+def : Pat<(sub P2GPRPair:$s1, i64immleaf:$s), (SUB64ri P2GPRPair:$s1, imm:$s)>;
+def : Pat<(and P2GPRPair:$s1, P2GPRPair:$s), (AND64rr P2GPRPair:$s1, P2GPRPair:$s)>;
+def : Pat<(and P2GPRPair:$s1, i64immleaf:$s), (AND64ri P2GPRPair:$s1, imm:$s)>;
+def : Pat<(or P2GPRPair:$s1, P2GPRPair:$s), (OR64rr P2GPRPair:$s1, P2GPRPair:$s)>;
+def : Pat<(or P2GPRPair:$s1, i64immleaf:$s), (OR64ri P2GPRPair:$s1, imm:$s)>;
+def : Pat<(xor P2GPRPair:$s1, P2GPRPair:$s), (XOR64rr P2GPRPair:$s1, P2GPRPair:$s)>;
+def : Pat<(xor P2GPRPair:$s1, i64immleaf:$s), (XOR64ri P2GPRPair:$s1, imm:$s)>;
+
+def : Pat<(i64 (sext P2GPR:$s)), (SEXT64 P2GPR:$s)>;
+def : Pat<(i64 (zext P2GPR:$s)), (ZEXT64 P2GPR:$s)>;
+
+def : Pat<(sext_inreg P2GPRPair:$d, i8), (SEXTIR64 P2GPRPair:$d, 7)>;
+def : Pat<(sext_inreg P2GPRPair:$d, i16), (SEXTIR64 P2GPRPair:$d, 15)>;
+def : Pat<(sext_inreg P2GPRPair:$d, i32), (SEXTIR64 P2GPRPair:$d, 31)>;
+
+//subregisters, a register providing an insert value, and a subregister index
 /*--------------------------------*/
 /* More complicated math          */
 /*--------------------------------*/
@@ -180,7 +225,9 @@ let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
     def CMPrr    : P2InstCZIDS<0b0010000, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmp $d, $s">;
     def CMPri    : P2InstCZIDS<0b0010000, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmp $d, #$s">;
     def CMPRrr   : P2InstCZIDS<0b0010100, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpr $d, $s">;
-    def CMPRri   : P2InstCZIDS<0b0010100, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpr $d, #$s">;
+    def CMPRri   : P2InstCZIDS<0b0010100, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpr $d, #$s">;  
+    def CMPXrr   : P2InstCZIDS<0b0010001, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpx $d, $s">;
+    def CMPXri   : P2InstCZIDS<0b0010001, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpx $d, #$s">;
 
     def CMPSrr    : P2InstCZIDS<0b0010010, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmps $d, $s">;
     def CMPSri    : P2InstCZIDS<0b0010010, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmps $d, #$s">;
@@ -271,17 +318,33 @@ def : Pat<(brind P2GPR:$d), (JMPr P2GPR:$d, noeff, always)>;
 /* moving data                    */
 /*--------------------------------*/
 
+// compare 32 bit values and select a 32 bit value
 def SELECTCC    : Pseudo<(outs P2GPR:$d), (ins P2GPR:$lhs, i32imm:$rhs, i32imm:$t, i32imm:$f, i8imm:$cc), "selectcc $d, $lhs, $rhs, $t, $f, $cc">;
 
+// compare 64 bit values and select a 64 bit value
+def SELECTCC64  : Pseudo<(outs P2GPR:$d), (ins P2GPRPair:$lhs, P2GPRPair:$rhs, i32imm:$t, i32imm:$f, i8imm:$cc), "selectcc64 $d, $lhs, $rhs, $t, $f, $cc">;
+
+// compare 64 bit and select 64 bit is lowered to 2 SELECTCCs, so no pseudo exists
+
 multiclass sel_cc<CondCode c, int cc> {
-    def : Pat<(selectcc P2GPR:$lhs, imm:$rhs, imm:$t, imm:$f, c), (SELECTCC P2GPR:$lhs, imm:$rhs, imm:$t, imm:$f, cc)>;
-    def : Pat<(selectcc P2GPR:$lhs, imm:$rhs, P2GPR:$t, imm:$f, c), (SELECTCC P2GPR:$lhs, imm:$rhs, P2GPR:$t, imm:$f, cc)>;
-    def : Pat<(selectcc P2GPR:$lhs, imm:$rhs, P2GPR:$t, imm:$f, c), (SELECTCC P2GPR:$lhs, imm:$rhs, P2GPR:$t, imm:$f, cc)>;
-    def : Pat<(selectcc P2GPR:$lhs, imm:$rhs, P2GPR:$t, P2GPR:$f, c), (SELECTCC P2GPR:$lhs, imm:$rhs, P2GPR:$t, P2GPR:$f, cc)>;
-    def : Pat<(selectcc P2GPR:$lhs, P2GPR:$rhs, imm:$t, imm:$f, c), (SELECTCC P2GPR:$lhs, P2GPR:$rhs, imm:$t, imm:$f, cc)>;
-    def : Pat<(selectcc P2GPR:$lhs, P2GPR:$rhs, imm:$t, P2GPR:$f, c), (SELECTCC P2GPR:$lhs, P2GPR:$rhs, imm:$t, P2GPR:$f, cc)>;
-    def : Pat<(selectcc P2GPR:$lhs, P2GPR:$rhs, P2GPR:$t, imm:$f, c), (SELECTCC P2GPR:$lhs, P2GPR:$rhs, P2GPR:$t, imm:$f, cc)>;
+    def : Pat<(selectcc P2GPR:$lhs, imm:$rhs, imm:$t, imm:$f, c),       (SELECTCC P2GPR:$lhs, imm:$rhs, imm:$t, imm:$f, cc)>;
+    def : Pat<(selectcc P2GPR:$lhs, imm:$rhs, P2GPR:$t, imm:$f, c),     (SELECTCC P2GPR:$lhs, imm:$rhs, P2GPR:$t, imm:$f, cc)>;
+    def : Pat<(selectcc P2GPR:$lhs, imm:$rhs, P2GPR:$t, imm:$f, c),     (SELECTCC P2GPR:$lhs, imm:$rhs, P2GPR:$t, imm:$f, cc)>;
+    def : Pat<(selectcc P2GPR:$lhs, imm:$rhs, P2GPR:$t, P2GPR:$f, c),   (SELECTCC P2GPR:$lhs, imm:$rhs, P2GPR:$t, P2GPR:$f, cc)>;
+    def : Pat<(selectcc P2GPR:$lhs, P2GPR:$rhs, imm:$t, imm:$f, c),     (SELECTCC P2GPR:$lhs, P2GPR:$rhs, imm:$t, imm:$f, cc)>;
+    def : Pat<(selectcc P2GPR:$lhs, P2GPR:$rhs, imm:$t, P2GPR:$f, c),   (SELECTCC P2GPR:$lhs, P2GPR:$rhs, imm:$t, P2GPR:$f, cc)>;
+    def : Pat<(selectcc P2GPR:$lhs, P2GPR:$rhs, P2GPR:$t, imm:$f, c),   (SELECTCC P2GPR:$lhs, P2GPR:$rhs, P2GPR:$t, imm:$f, cc)>;
     def : Pat<(selectcc P2GPR:$lhs, P2GPR:$rhs, P2GPR:$t, P2GPR:$f, c), (SELECTCC P2GPR:$lhs, P2GPR:$rhs, P2GPR:$t, P2GPR:$f, cc)>;
+
+    
+    def : Pat<(selectcc i64:$lhs, imm:$rhs, imm:$t, imm:$f, c),             (SELECTCC64 P2GPRPair:$lhs, imm:$rhs, imm:$t, imm:$f, cc)>;
+    def : Pat<(selectcc i64:$lhs, imm:$rhs, P2GPR:$t, imm:$f, c),           (SELECTCC64 P2GPRPair:$lhs, imm:$rhs, P2GPR:$t, imm:$f, cc)>;
+    def : Pat<(selectcc i64:$lhs, imm:$rhs, P2GPR:$t, imm:$f, c),           (SELECTCC64 P2GPRPair:$lhs, imm:$rhs, P2GPR:$t, imm:$f, cc)>;
+    def : Pat<(selectcc i64:$lhs, imm:$rhs, P2GPR:$t, P2GPR:$f, c),         (SELECTCC64 P2GPRPair:$lhs, imm:$rhs, P2GPR:$t, P2GPR:$f, cc)>;
+    def : Pat<(selectcc i64:$lhs, P2GPRPair:$rhs, imm:$t, imm:$f, c),       (SELECTCC64 P2GPRPair:$lhs, P2GPRPair:$rhs, imm:$t, imm:$f, cc)>;
+    def : Pat<(selectcc i64:$lhs, P2GPRPair:$rhs, imm:$t, P2GPR:$f, c),     (SELECTCC64 P2GPRPair:$lhs, P2GPRPair:$rhs, imm:$t, P2GPR:$f, cc)>;
+    def : Pat<(selectcc i64:$lhs, P2GPRPair:$rhs, P2GPR:$t, imm:$f, c),     (SELECTCC64 P2GPRPair:$lhs, P2GPRPair:$rhs, P2GPR:$t, imm:$f, cc)>;
+    def : Pat<(selectcc i64:$lhs, P2GPRPair:$rhs, P2GPR:$t, P2GPR:$f, c),   (SELECTCC64 P2GPRPair:$lhs, P2GPRPair:$rhs, P2GPR:$t, P2GPR:$f, cc)>;
 }
 
 defm SELECTueq   : sel_cc<SETUEQ, 0>;
@@ -302,13 +365,11 @@ def : Pat<(select P2GPR:$c, P2GPR:$t, imm:$f), (SELECTCC P2GPR:$c, 0, P2GPR:$t, 
 def : Pat<(select P2GPR:$c, imm:$t, P2GPR:$f), (SELECTCC P2GPR:$c, 0, imm:$t, P2GPR:$f, 1)>;
 def : Pat<(select P2GPR:$c, imm:$t, imm:$f), (SELECTCC P2GPR:$c, 0, imm:$t, imm:$f, 1)>;
 
-// for immediate moves, use a psuedo instruction that will insert an AUGS. Later we will write an optimizer pass
-// that will replace the pattern of augs #imm32, mov <r> #imm, <any instruction operating on r> to remove the
-// mov <r> call, change augs to s or d as needed, and change the final instruction to use the #imm instead.
-// a second pass should remove any augs/d #0 calls that are not used in relocation calls
-
 defm MOV        : P2InstCZIDSm<0b0110000, (ins), "mov">;
 
+def MOVi64      : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s), "mov64 $d, #$s">;
+
+def : Pat<(i64immleaf:$s), (MOVi64 imm:$s)>;
 def : Pat<(imm:$s), (MOVri imm:$s, always, noeff)>;
 
 defm RDBYTE     : P2InstCZIDSm<0b1010110, (ins), "rdbyte">;
@@ -340,21 +401,28 @@ def WFWORDi     : P2InstLD<0b1101011, 0b000010110, 0b1, (outs i32imm:$d), (ins),
 def WFLONGr     : P2InstLD<0b1101011, 0b000010111, 0b0, (outs P2GPR:$d), (ins), "wflong $d">;
 def WFLONGi     : P2InstLD<0b1101011, 0b000010111, 0b1, (outs i32imm:$d), (ins), "wflong #$d">;
 
+def RDDLONG     : Pseudo<(outs P2GPRPair:$reg), (ins P2GPR:$addr), "rddlong $reg, $addr">;
+def WRDLONG     : Pseudo<(outs), (ins P2GPRPair:$reg, P2GPR:$addr), "wrdlong $reg, $addr">;
+
+def : Pat<(i64 (load addr:$s)), (RDDLONG P2GPR:$s)>;
+
 def : Pat<(zextloadi8 imm:$s), (RDBYTEri imm:$s, always, noeff)>;
 def : Pat<(zextloadi8 addr:$s), (RDBYTErr P2GPR:$s, always, noeff)>;
 def : Pat<(zextloadi16 imm:$s), (RDWORDri imm:$s, always, noeff)>;
 def : Pat<(zextloadi16 addr:$s), (RDWORDrr P2GPR:$s, always, noeff)>;
 def : Pat<(load imm:$s), (RDLONGri imm:$s, always, noeff)>;
-def : Pat<(load addr:$s), (RDLONGrr P2GPR:$s, always, noeff)>;
+def : Pat<(i32 (load addr:$s)), (RDLONGrr P2GPR:$s, always, noeff)>;
 
 def : Pat<(truncstorei8 P2GPR:$d, addr:$s), (WRBYTErr P2GPR:$d, P2GPR:$s, always)>;
-def : Pat<(truncstorei8 imm:$d, addr:$s), (WRBYTEir imm:$d, P2GPR:$s, always)>;
+def : Pat<(truncstorei8 i32immleaf:$d, addr:$s), (WRBYTEir imm:$d, P2GPR:$s, always)>;
 def : Pat<(truncstorei16 P2GPR:$d, addr:$s), (WRWORDrr P2GPR:$d, P2GPR:$s, always)>;
-def : Pat<(truncstorei16 imm:$d, addr:$s), (WRWORDir imm:$d, P2GPR:$s, always)>;
+def : Pat<(truncstorei16 i32immleaf:$d, addr:$s), (WRWORDir imm:$d, P2GPR:$s, always)>;
+
 def : Pat<(store P2GPR:$d, imm:$s), (WRLONGri P2GPR:$d, imm:$s, always)>;
-def : Pat<(store imm:$d, imm:$s), (WRLONGii imm:$d, imm:$s, always)>;
+def : Pat<(store i32immleaf:$d, imm:$s), (WRLONGii imm:$d, imm:$s, always)>;
 def : Pat<(store P2GPR:$d, addr:$s), (WRLONGrr P2GPR:$d, P2GPR:$s, always)>;
-def : Pat<(store imm:$d, addr:$s), (WRLONGir imm:$d, P2GPR:$s, always)>;
+def : Pat<(store i32immleaf:$d, addr:$s), (WRLONGir imm:$d, P2GPR:$s, always)>;
+def : Pat<(store i64:$d, addr:$s), (WRDLONG P2GPRPair:$d, P2GPR:$s)>;
 
 def : Pat<(extloadi8 addr:$s), (RDBYTErr P2GPR:$s, always, noeff)>;
 def : Pat<(extloadi16 addr:$s), (RDWORDrr P2GPR:$s, always, noeff)>;
@@ -362,6 +430,8 @@ def : Pat<(extloadi16 addr:$s), (RDWORDrr P2GPR:$s, always, noeff)>;
 def : Pat<(sextloadi1 addr:$s), (SIGNXri (RDBYTErr P2GPR:$s, always, noeff), 1, always, noeff)>;
 def : Pat<(sextloadi8 addr:$s), (SIGNXri (RDBYTErr P2GPR:$s, always, noeff), 7, always, noeff)>;
 def : Pat<(sextloadi16 addr:$s), (SIGNXri (RDWORDrr P2GPR:$s, always, noeff), 15, always, noeff)>;
+
+def : Pat<(i32 (trunc P2GPRPair:$s)), (EXTRACT_SUBREG P2GPRPair:$s, sub0)>;
 
 /*--------------------------------*/
 /* Register indirection           */

@@ -75,10 +75,14 @@ const char *P2TargetLowering::getTargetNodeName(unsigned Opcode) const {
 
 P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(TM), target_machine(TM) {
     addRegisterClass(MVT::i32, &P2::P2GPRRegClass);
+    addRegisterClass(MVT::i64, &P2::P2GPRPairRegClass);
 
     //  computeRegisterProperties - Once all of the register classes are
     //  added, this allows us to compute derived properties we expose.
     computeRegisterProperties(TM.getRegisterInfo());
+
+    setOperationAction(ISD::LOAD, MVT::i64, Legal);
+    setOperationAction(ISD::STORE, MVT::i64, Legal);
 
     // See https://llvm.org/doxygen/TargetLowering_8h_source.html#l00192 for the various action
     setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
@@ -121,11 +125,40 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::SREM, MVT::i32, Expand);
     setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
 
-    // setup all the functions that will be libcalls.
-    setLibcallName(RTLIB::SDIV_I32, "__sdiv");
-    setLibcallName(RTLIB::SREM_I32, "__srem");
-    setLibcallName(RTLIB::MEMCPY, "__memcpy");
-    setLibcallName(RTLIB::MEMSET, "__memset");
+    // 64 bit support
+    setTruncStoreAction(MVT::i64, MVT::i8, Expand);
+    setTruncStoreAction(MVT::i64, MVT::i16, Expand);
+    setTruncStoreAction(MVT::i64, MVT::i32, Expand);
+
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i8, Expand);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i8, Expand);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i8, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i16, Expand);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i16, Expand);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i16, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i32, Expand);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i32, Expand);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i32, Expand);
+
+    setOperationAction(ISD::ADD, MVT::i64, Legal);
+    setOperationAction(ISD::SUB, MVT::i64, Legal);
+    setOperationAction(ISD::AND, MVT::i64, Legal);
+    setOperationAction(ISD::OR, MVT::i64, Legal);
+    setOperationAction(ISD::XOR, MVT::i64, Legal);
+    setOperationAction(ISD::SETCC, MVT::i64, Expand);
+    setOperationAction(ISD::SELECT, MVT::i64, Custom);
+    setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
+    setOperationAction(ISD::BR_CC, MVT::i64, Expand);
+
+    // 64 bit libcalls
+    setOperationAction(ISD::SRL, MVT::i64, Custom);
+    setOperationAction(ISD::SRA, MVT::i64, Custom);
+    setOperationAction(ISD::SHL, MVT::i64, Custom);
+    setOperationAction(ISD::MUL, MVT::i64, LibCall);
+    setOperationAction(ISD::SDIV, MVT::i64, LibCall);
+    setOperationAction(ISD::SREM, MVT::i64, LibCall);
+    setOperationAction(ISD::UDIV, MVT::i64, LibCall);
+    setOperationAction(ISD::UREM, MVT::i64, LibCall);
 }
 
 SDValue P2TargetLowering::lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {
@@ -147,7 +180,8 @@ SDValue P2TargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     SDLoc dl(Op);
 
     // Vastart just stores the address of the VarArgsFrameIndex slot into the
-    // memory location argument.
+    // memory location argument. this is the TOP of the next va args, so we need to subtract 
+    // by the size of the value to read before reading. VAARG will handle this
     SDValue FI = DAG.getFrameIndex(P2FI->getVarArgsFrameIndex(), getPointerTy(DL));
 
     return DAG.getStore(Op.getOperand(0), dl, FI, Op.getOperand(1), MachinePointerInfo(SV), 0);
@@ -166,20 +200,92 @@ SDValue P2TargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const {
 
     // decrement the pointer, VAList, to the next vaarg,
     // store the decremented VAList to the legalized pointer,
-    // and load the actual argument out of the pointer VAList
+    // and load the actual argument out of the adjusted VAList pointer
     SDValue cond = DAG.getTargetConstant(P2::ALWAYS, DL, MVT::i32);
     SDValue eff = DAG.getTargetConstant(P2::NOEFF, DL, MVT::i32);
     SDValue ops[] = {VAList, DAG.getIntPtrConstant(VT.getSizeInBits()/8, DL, true), cond, eff};
     SDValue adj = SDValue(DAG.getMachineNode(P2::SUBri, DL, vt, ops), 0);
     Chain = DAG.getStore(VAList.getValue(1), DL, adj, VAListPtr, MachinePointerInfo(SV));
 
-    return DAG.getLoad(VT, DL, Chain, VAList, MachinePointerInfo(), std::min(vt.getSizeInBits(), VT.getSizeInBits())/8);
+    return DAG.getLoad(VT, DL, Chain, adj, MachinePointerInfo(), std::min(vt.getSizeInBits(), VT.getSizeInBits())/8);
 }
 
 SDValue P2TargetLowering::lowerJumpTable(SDValue Op, SelectionDAG &DAG) const {
     auto *N = cast<JumpTableSDNode>(Op);
     SDValue GA = DAG.getTargetJumpTable(N->getIndex(), MVT::i32);
     return DAG.getNode(P2ISD::GAWRAPPER, SDLoc(N), MVT::i32, GA);
+}
+
+SDValue P2TargetLowering::lowerLibcall64(RTLIB::Libcall lc, SDValue Op, SelectionDAG &DAG) const {
+    SDNode *node = Op.getNode();
+    EVT VT = node->getValueType(0);
+    SDLoc DL(Op);
+
+    SDValue op1 = node->getOperand(0);
+    SDValue op2 = node->getOperand(1);
+
+    TargetLowering::MakeLibCallOptions CallOptions;
+    auto r = makeLibCall(DAG, lc, VT, {op1, op2}, CallOptions, DL);
+    return r.first;
+}
+SDValue P2TargetLowering::lowerSRL64(SDValue Op, SelectionDAG &DAG) const {
+    return lowerLibcall64(RTLIB::SRL_I64, Op, DAG);
+}
+
+SDValue P2TargetLowering::lowerSRA64(SDValue Op, SelectionDAG &DAG) const {
+    return lowerLibcall64(RTLIB::SRA_I64, Op, DAG);
+}
+
+SDValue P2TargetLowering::lowerSHL64(SDValue Op, SelectionDAG &DAG) const {
+    return lowerLibcall64(RTLIB::SHL_I64, Op, DAG);
+}
+
+SDValue P2TargetLowering::lowerSelect64(SDValue Op, SelectionDAG &DAG) const {
+    SDNode *node = Op.getNode();
+    EVT VT = node->getValueType(0);
+    SDLoc DL(Op);
+
+    auto cond = node->getOperand(0);
+    auto t_val = node->getOperand(1);
+    auto f_val = node->getOperand(2);
+
+    // we want to break the select into a high result and a low result
+    // for each, take the true value, and false value, and break it apart into subregs
+    // if the true/false value is i32, then set the high to 0 and low to the i32
+
+    // break apart true value
+    SDValue t_lo;
+    SDValue t_hi;
+
+    if (t_val.getValueType() == MVT::i32) {
+        t_lo = t_val;
+        t_hi = DAG.getTargetConstant(0, DL, MVT::i32);
+    } else {
+        t_lo = DAG.getTargetExtractSubreg(P2::sub0, DL, MVT::i32, t_val);
+        t_hi = DAG.getTargetExtractSubreg(P2::sub1, DL, MVT::i32, t_val); 
+    }
+
+    // break apart false value
+    SDValue f_lo;
+    SDValue f_hi;
+
+    if (f_val.getValueType() == MVT::i32) {
+        f_lo = f_val;
+        f_hi = DAG.getTargetConstant(0, DL, MVT::i32);
+    } else {
+        f_lo = DAG.getTargetExtractSubreg(P2::sub0, DL, MVT::i32, f_val);
+        f_hi = DAG.getTargetExtractSubreg(P2::sub1, DL, MVT::i32, f_val); 
+    }
+
+    // build 2 select nodes for res_lo and res_hi
+    auto res_lo = DAG.getSelect(DL, MVT::i32, cond, t_lo, f_lo);
+    auto res_hi = DAG.getSelect(DL, MVT::i32, cond, t_hi, f_hi);
+
+    SDValue res = SDValue(DAG.getMachineNode(TargetOpcode::IMPLICIT_DEF, DL, VT), 0);
+    res = DAG.getTargetInsertSubreg(P2::sub0, DL, VT, res, res_lo);
+    res = DAG.getTargetInsertSubreg(P2::sub1, DL, VT, res, res_hi);
+
+    return res;
 }
 
 #include "P2GenCallingConv.inc"
@@ -198,6 +304,15 @@ SDValue P2TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
             return lowerVAARG(Op, DAG);
         case ISD::JumpTable:
             return lowerJumpTable(Op, DAG);
+        case ISD::SRL:
+            return lowerSRL64(Op, DAG);
+        case ISD::SRA:
+            return lowerSRA64(Op, DAG);
+        case ISD::SHL:
+            return lowerSHL64(Op, DAG);
+        case ISD::SELECT:
+            if (Op->getValueType(0) == MVT::i64)
+                return lowerSelect64(Op, DAG);
     }
 
     return SDValue();
@@ -299,9 +414,9 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
             ISD::ArgFlagsTy Flags = Outs[i].Flags;
             int arg_size = 0;
             if (Flags.isByVal()) 
-                arg_size = Flags.getByValSize();
-            else
-                arg_size = 4; 
+                arg_size = Flags.getByValSize(); 
+            else 
+                arg_size = Arg.getValueSizeInBits()/8;
 
             int off = (NextStackOffset-VA.getLocMemOffset()-arg_size);
             SDValue PtrOff;
@@ -515,7 +630,7 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
             if (Flags.isByVal()) 
                 arg_size = Flags.getByValSize();
             else
-                arg_size = 4; 
+                arg_size = ValVT.getSizeInBits()/8; 
 
             last_formal_arg_offset = stack_size-VA.getLocMemOffset()-arg_size;
 
@@ -527,7 +642,7 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
             } else {
                 // Load the argument to a virtual register
                 auto obj_size = VA.getLocVT().getStoreSize();
-                assert((obj_size <= 4) && "Unhandled argument--object size > stack slot size (4 bytes) for non-byval argument");
+                // assert((obj_size <= 4) && "Unhandled argument--object size > stack slot size (4 bytes) for non-byval argument");
                 LLVM_DEBUG(errs() << " - location offset: " << VA.getLocMemOffset() << "\n");
 
                 // Create the frame index object for this incoming parameter
@@ -545,7 +660,7 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
     }
 
     if (IsVarArg) {
-        P2FI->setVarArgsFrameIndex(MFI->CreateFixedObject(4, last_formal_arg_offset-4, true));
+        P2FI->setVarArgsFrameIndex(MFI->CreateFixedObject(4, last_formal_arg_offset, true));
     }
 
     for (unsigned i = 0; i < ArgLocs.size(); i++) {
@@ -812,7 +927,7 @@ std::pair<unsigned, const TargetRegisterClass *> P2TargetLowering::getRegForInli
     // if (R.second)
     //     return R;
 
-    unsigned R = getRegisterByName(Constraint.substr(1, Constraint.size()-1));
+    int R = getRegisterByName(Constraint.substr(1, Constraint.size()-1));
     if (R != -1) return std::make_pair(R, TRI->getRegClass(P2::P2GPRRegClassID));
 
     return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);

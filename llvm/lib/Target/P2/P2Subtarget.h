@@ -46,6 +46,10 @@ namespace llvm {
         ///
         P2Subtarget(const Triple &TT, const std::string &CPU, const std::string &FS, const P2TargetMachine &TM);
 
+        bool enableSubRegLiveness() const override {
+            return true;
+        }
+
         const TargetFrameLowering *getFrameLowering() const override { return &FrameLowering; }
         const P2InstrInfo *getInstrInfo() const override { return &InstrInfo; }
         const TargetRegisterInfo *getRegisterInfo() const override { return &InstrInfo.getRegisterInfo(); }

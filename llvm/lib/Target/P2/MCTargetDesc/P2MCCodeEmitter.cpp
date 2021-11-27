@@ -132,7 +132,7 @@ unsigned P2MCCodeEmitter::encodeCallTarget(const MCInst &MI, unsigned OpNo, Smal
 
         LLVM_DEBUG(expr->dump());
 
-        if (expr->getSymbol().isExternal()) {
+        if (is_rtlib(expr->getSymbol())) {
             LLVM_DEBUG(errs() << "creating libcall (cog9) fixup fixup\n");
             FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_COG9);
         } else {
@@ -221,12 +221,29 @@ unsigned P2MCCodeEmitter::getMemEncoding(const MCInst &MI, unsigned OpNo, SmallV
                                             const MCSubtargetInfo &STI) const {
 
     llvm_unreachable("getMemEncoding not implemented");
-    // TODO
-    assert(MI.getOperand(OpNo).isReg());
-    unsigned RegBits = getMachineOpValue(MI, MI.getOperand(OpNo), Fixups, STI) << 16;
-    unsigned OffBits = getMachineOpValue(MI, MI.getOperand(OpNo+1), Fixups, STI);
+}
 
-    return (OffBits & 0xFFFF) | RegBits;
+bool P2MCCodeEmitter::is_rtlib(const MCSymbol &sym) const {
+    auto name = sym.getName();
+
+    const char* libcallRoutineNames[] = {
+        #define HANDLE_LIBCALL(code, name) name,
+        #include "llvm/IR/RuntimeLibcalls.def"
+        #undef HANDLE_LIBCALL
+        // add non-standard libcalls here
+        "__udivmoddi4"
+    };
+
+    ArrayRef<const char*> libCallRoutinesList = makeArrayRef(libcallRoutineNames);
+
+    for (auto s : libCallRoutinesList) {
+        if (s && name == StringRef(s)) {
+            LLVM_DEBUG(errs() << name << " is a libcall\n");
+            return true;
+        }
+    }
+
+    return false;
 }
 
 #include "P2GenMCCodeEmitter.inc"

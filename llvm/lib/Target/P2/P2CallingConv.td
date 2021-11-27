@@ -18,20 +18,25 @@ def CC_P2 : CallingConv<[
     CCIfType<[i32], CCAssignToReg<[R0, R1, R2, R3]>>,
     // Fall-back, and use the stack, stack slot is 4 bytes wide and byte aligned.
     CCIfType<[i32], CCAssignToStack<4, 1>>,
-    // 64 bit arguments are passed on the stack
+    // 64 bit arguments are passed via register pairs
+    CCIfType<[i64], CCAssignToReg<[R0_R1, R2_R3]>>,
+    // and as a fallback, via the stack
     CCIfType<[i64], CCAssignToStack<8, 1>>
 ]>;
 
 // Calling convention for variadic functions.
 def CC_P2_Vararg : CallingConv <[
     // variable args are always passed through the stack with an alignment of 1.
-    CCAssignToStack<4, 1>
+    CCIfType<[i32], CCAssignToStack<4, 1>>,
+    CCIfType<[i64], CCAssignToStack<8, 1>>,
 ]>;
 
 def RetCC_P2 : CallingConv <[
     CCIfType<[i1, i8, i16], CCPromoteToType<i32>>,
-    // i32 are returned in R31 and R30 (two registers to 64 bit numbers if needed)
-    CCIfType<[i32], CCAssignToReg<[R31, R30]>>,
+    // i32 are returned in R31
+    CCIfType<[i32], CCAssignToReg<[R31]>>,
+
+    CCIfType<[i64], CCAssignToReg<[R30_R31]>>,
 
     CCIfByVal<CCPassByVal<1, 1>>
 ]>;

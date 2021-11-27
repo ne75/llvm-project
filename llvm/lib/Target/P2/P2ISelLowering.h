@@ -36,7 +36,7 @@ namespace llvm {
             // call subroutine
             CALL,
 
-            // global address rapper
+            // global address wrapper
             GAWRAPPER
         };
 
@@ -62,7 +62,7 @@ namespace llvm {
 
         SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
-        bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override{
+        bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override {
             // Can't fold offsets, so need to add explicit instruction
             return false;
         }
@@ -139,6 +139,13 @@ namespace llvm {
         SDValue lowerVASTART(SDValue Op, SelectionDAG &DAG) const;
         SDValue lowerVAARG(SDValue Op, SelectionDAG &DAG) const;
         SDValue lowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
+
+        SDValue lowerSRL64(SDValue Op, SelectionDAG &DAG) const;
+        SDValue lowerSRA64(SDValue Op, SelectionDAG &DAG) const;
+        SDValue lowerSHL64(SDValue Op, SelectionDAG &DAG) const;
+
+        SDValue lowerLibcall64(RTLIB::Libcall lc, SDValue Op, SelectionDAG &DAG) const;
+        SDValue lowerSelect64(SDValue Op, SelectionDAG &DAG) const;
     };
 }
 

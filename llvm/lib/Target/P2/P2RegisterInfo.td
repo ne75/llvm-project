@@ -24,6 +24,12 @@ class P2Reg<bits<9> Enc, string n> : Register<n> {
     let Namespace = "P2";
 }
 
+// define some artifical 64 bit registers for 64 bit operations
+let Namespace = "P2" in {
+    def sub0 : SubRegIndex<32>;
+    def sub1 : SubRegIndex<32, 32>;
+}
+
 //===----------------------------------------------------------------------===//
 //@Registers
 //===----------------------------------------------------------------------===//
@@ -93,7 +99,25 @@ let Namespace = "P2" in {
     foreach i = 0-463 in {
         def C#i : P2Reg<i, "c"#i>,  DwarfRegNum<[!add(i, 52)]>;
     }
+}
 
+let SubRegIndices = [sub0, sub1], CoveredBySubRegs = 1, Namespace = "P2" in {
+    def R0_R1 : RegisterWithSubRegs<"r0:r1", [R0, R1]>;
+    def R2_R3 : RegisterWithSubRegs<"r2:r3", [R2, R3]>;
+    def R4_R5 : RegisterWithSubRegs<"r4:r5", [R4, R5]>;
+    def R6_R7 : RegisterWithSubRegs<"r6:r7", [R6, R7]>;
+    def R8_R9 : RegisterWithSubRegs<"r8:r9", [R8, R9]>;
+    def R10_R11 : RegisterWithSubRegs<"r10:r11", [R10, R11]>;
+    def R12_R13 : RegisterWithSubRegs<"r12:r13", [R12, R13]>;
+    def R14_R15 : RegisterWithSubRegs<"r14:r15", [R14, R15]>;
+    def R16_R17 : RegisterWithSubRegs<"r16:r17", [R16, R17]>;
+    def R18_R19 : RegisterWithSubRegs<"r18:r19", [R18, R19]>;
+    def R20_R21 : RegisterWithSubRegs<"r20:r21", [R20, R21]>;
+    def R22_R23 : RegisterWithSubRegs<"r22:r23", [R22, R23]>;
+    def R24_R25 : RegisterWithSubRegs<"r24:r25", [R24, R25]>;
+    def R26_R27 : RegisterWithSubRegs<"r26:r27", [R26, R27]>;
+    def R28_R29 : RegisterWithSubRegs<"r28:r29", [R28, R29]>;
+    def R30_R31 : RegisterWithSubRegs<"r30:r31", [R30, R31]>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -114,5 +138,10 @@ def P2GPR : RegisterClass<"P2", [i32], 32, (add
     // i/o registers
     DIRA, DIRB, OUTA, OUTB, INA, INB
 )>;
+
+def P2GPRPair : RegisterClass<"P2", [i64], 64, (add R0_R1, R2_R3, R4_R5, R6_R7,
+                                                    R8_R9, R10_R11, R12_R13, R14_R15,
+                                                    R16_R17, R18_R19, R20_R21, R22_R23,
+                                                    R24_R25, R26_R27, R28_R29, R30_R31)>;
 
 def P2Implicit : RegisterClass<"P2", [i32], 32, (add SW, QX, QY, N)>;
