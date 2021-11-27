@@ -99,6 +99,7 @@ let Constraints = "$s1 = $d", s_num = 2 in {
     defm SUBX   : P2InstCZIDSm<0b0001101, (ins P2GPR:$s1), "subx">;
     defm SUBS   : P2InstCZIDSm<0b0001110, (ins P2GPR:$s1), "subs">;
     defm SUBSX  : P2InstCZIDSm<0b0001111, (ins P2GPR:$s1), "subsx">;
+    defm SUBR   : P2InstCZIDSm<0b0010110, (ins P2GPR:$s1), "subr">;
     defm AND    : P2InstCZIDSm<0b0101000, (ins P2GPR:$s1), "and">;
     defm OR     : P2InstCZIDSm<0b0101010, (ins P2GPR:$s1), "or">;
     defm XOR    : P2InstCZIDSm<0b0101011, (ins P2GPR:$s1), "xor">;
@@ -116,6 +117,8 @@ let Constraints = "$s = $d" in {
 }
 
 defm ENCOD  : P2InstCZIDSm<0b0111100, (ins), "encod">;
+defm DECOD  : P2InstIDSm<0b100111000, "decod">;
+defm ONES   : P2InstCZIDSm<0b0111101, (ins), "ones">;
 
 // 64 bit pseudos
 let Constraints = "$s1 = $d" in {
@@ -130,10 +133,12 @@ let Constraints = "$s1 = $d" in {
     def AND64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "and64 $d, $s">;
     def OR64ri      : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "or64 $d, $s">;
     def XOR64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "xor64 $d, $s">;
+
+    def SEXTIR64    : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, i8imm:$s), "sextir64 $d, #$s">;
 }
 
-def SEXT64  : Pseudo<(outs P2GPRPair:$d), (ins P2GPR:$s), "sext64 $d, $s">;
-def ZEXT64  : Pseudo<(outs P2GPRPair:$d), (ins P2GPR:$s), "zext64 $d, $s">;
+def SEXT64      : Pseudo<(outs P2GPRPair:$d), (ins P2GPR:$s), "sext64 $d, $s">;
+def ZEXT64      : Pseudo<(outs P2GPRPair:$d), (ins P2GPR:$s), "zext64 $d, $s">;
 
 def : Pat<(rotl P2GPR:$src1, P2GPR:$s), (ROLrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
 def : Pat<(rotl P2GPR:$src1, i32immleaf:$s), (ROLri P2GPR:$src1, imm:$s, always, noeff)>;
@@ -182,6 +187,10 @@ def : Pat<(xor P2GPRPair:$s1, i64immleaf:$s), (XOR64ri P2GPRPair:$s1, imm:$s)>;
 def : Pat<(i64 (sext P2GPR:$s)), (SEXT64 P2GPR:$s)>;
 def : Pat<(i64 (zext P2GPR:$s)), (ZEXT64 P2GPR:$s)>;
 
+def : Pat<(sext_inreg P2GPRPair:$d, i8), (SEXTIR64 P2GPRPair:$d, 7)>;
+def : Pat<(sext_inreg P2GPRPair:$d, i16), (SEXTIR64 P2GPRPair:$d, 15)>;
+def : Pat<(sext_inreg P2GPRPair:$d, i32), (SEXTIR64 P2GPRPair:$d, 31)>;
+
 //subregisters, a register providing an insert value, and a subregister index
 /*--------------------------------*/
 /* More complicated math          */
@@ -216,7 +225,9 @@ let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
     def CMPrr    : P2InstCZIDS<0b0010000, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmp $d, $s">;
     def CMPri    : P2InstCZIDS<0b0010000, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmp $d, #$s">;
     def CMPRrr   : P2InstCZIDS<0b0010100, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpr $d, $s">;
-    def CMPRri   : P2InstCZIDS<0b0010100, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpr $d, #$s">;
+    def CMPRri   : P2InstCZIDS<0b0010100, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpr $d, #$s">;  
+    def CMPXrr   : P2InstCZIDS<0b0010001, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpx $d, $s">;
+    def CMPXri   : P2InstCZIDS<0b0010001, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpx $d, #$s">;
 
     def CMPSrr    : P2InstCZIDS<0b0010010, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmps $d, $s">;
     def CMPSri    : P2InstCZIDS<0b0010010, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmps $d, #$s">;

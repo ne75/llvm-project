@@ -109,6 +109,7 @@ void P2ExpandPseudos::expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::it
     unsigned movt_op = P2::MOVrr;
     unsigned movf_op = P2::MOVrr;
     unsigned cmp_op;
+    unsigned cmp_op_hi;
 
     if (f.isImm()) {
         movf_op = P2::MOVri;
@@ -127,8 +128,10 @@ void P2ExpandPseudos::expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::it
         case P2::SETUGE:
             if (rhs.isImm()) {
                 cmp_op = P2::CMPri;
+                cmp_op_hi = P2::CMPXri;
             } else {
                 cmp_op = P2::CMPrr;
+                cmp_op_hi = P2::CMPXrr;
             }
             break;
 
@@ -140,8 +143,10 @@ void P2ExpandPseudos::expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::it
         case P2::SETGE:
             if (rhs.isImm()) {
                 cmp_op = P2::CMPSri;
+                cmp_op_hi = P2::CMPXri;
             } else {
                 cmp_op = P2::CMPSrr;
+                cmp_op_hi = P2::CMPXrr;
             }
             break;
         default:
@@ -200,10 +205,7 @@ void P2ExpandPseudos::expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::it
     } else {
         // 64 bit compare 
         // 1. compare low words, writing cz. 
-        // 2. with the true condition, compare the high words. writing cz.
-        // 
-        // if the first compare results in true flags, the second compare is executed, setting the flags to either maintain the 
-        // true state, or setting them to the false.
+        // 2. compare high words, with extended op, writing cz
         // 
         // if the first compare results in false flags, the second compare will be skipped and the flags maintain the "false" condition. 
         //
@@ -218,10 +220,10 @@ void P2ExpandPseudos::expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::it
                 .addImm(P2::ALWAYS).addImm(P2::WCZ);
 
             // high compare
-            BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(cmp_op), P2::SW)
+            BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(cmp_op_hi), P2::SW)
                 .addReg(lhs.getReg(), 0, P2::sub1)
                 .addImm(rhs.getImm() >> 32)
-                .addImm(true_cond_imm).addImm(P2::WCZ);
+                .addImm(P2::ALWAYS).addImm(P2::WCZ);
         } else {
             // low compare
             BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(cmp_op), P2::SW)
@@ -230,10 +232,10 @@ void P2ExpandPseudos::expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::it
                 .addImm(P2::ALWAYS).addImm(P2::WCZ);
 
             // high compare
-            BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(cmp_op), P2::SW)
+            BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(cmp_op_hi), P2::SW)
                 .addReg(lhs.getReg(), 0, P2::sub1)
                 .addReg(rhs.getReg(), 0, P2::sub1)
-                .addImm(true_cond_imm).addImm(P2::WCZ);
+                .addImm(P2::ALWAYS).addImm(P2::WCZ);
         }
     }
 

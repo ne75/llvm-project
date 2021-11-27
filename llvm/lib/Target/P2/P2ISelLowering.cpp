@@ -129,14 +129,17 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setTruncStoreAction(MVT::i64, MVT::i8, Expand);
     setTruncStoreAction(MVT::i64, MVT::i16, Expand);
     setTruncStoreAction(MVT::i64, MVT::i32, Expand);
+
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i8, Expand);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i8, Expand);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i8, Expand);
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i16, Expand);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i16, Expand);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i16, Expand);
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i32, Expand);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i32, Expand);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i32, Expand);
 
-    setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i64, Expand);
     setOperationAction(ISD::ADD, MVT::i64, Legal);
     setOperationAction(ISD::SUB, MVT::i64, Legal);
     setOperationAction(ISD::AND, MVT::i64, Legal);
@@ -156,10 +159,6 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::SREM, MVT::i64, LibCall);
     setOperationAction(ISD::UDIV, MVT::i64, LibCall);
     setOperationAction(ISD::UREM, MVT::i64, LibCall);
-
-    // setup all the functions that will be libcalls.
-    setLibcallName(RTLIB::MEMCPY, "__memcpy");
-    setLibcallName(RTLIB::MEMSET, "__memset");
 }
 
 SDValue P2TargetLowering::lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {
@@ -181,7 +180,8 @@ SDValue P2TargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     SDLoc dl(Op);
 
     // Vastart just stores the address of the VarArgsFrameIndex slot into the
-    // memory location argument.
+    // memory location argument. this is the TOP of the next va args, so we need to subtract 
+    // by the size of the value to read before reading. VAARG will handle this
     SDValue FI = DAG.getFrameIndex(P2FI->getVarArgsFrameIndex(), getPointerTy(DL));
 
     return DAG.getStore(Op.getOperand(0), dl, FI, Op.getOperand(1), MachinePointerInfo(SV), 0);
@@ -200,14 +200,14 @@ SDValue P2TargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const {
 
     // decrement the pointer, VAList, to the next vaarg,
     // store the decremented VAList to the legalized pointer,
-    // and load the actual argument out of the pointer VAList
+    // and load the actual argument out of the adjusted VAList pointer
     SDValue cond = DAG.getTargetConstant(P2::ALWAYS, DL, MVT::i32);
     SDValue eff = DAG.getTargetConstant(P2::NOEFF, DL, MVT::i32);
     SDValue ops[] = {VAList, DAG.getIntPtrConstant(VT.getSizeInBits()/8, DL, true), cond, eff};
     SDValue adj = SDValue(DAG.getMachineNode(P2::SUBri, DL, vt, ops), 0);
     Chain = DAG.getStore(VAList.getValue(1), DL, adj, VAListPtr, MachinePointerInfo(SV));
 
-    return DAG.getLoad(VT, DL, Chain, VAList, MachinePointerInfo(), std::min(vt.getSizeInBits(), VT.getSizeInBits())/8);
+    return DAG.getLoad(VT, DL, Chain, adj, MachinePointerInfo(), std::min(vt.getSizeInBits(), VT.getSizeInBits())/8);
 }
 
 SDValue P2TargetLowering::lowerJumpTable(SDValue Op, SelectionDAG &DAG) const {
@@ -660,7 +660,7 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
     }
 
     if (IsVarArg) {
-        P2FI->setVarArgsFrameIndex(MFI->CreateFixedObject(4, last_formal_arg_offset-4, true));
+        P2FI->setVarArgsFrameIndex(MFI->CreateFixedObject(4, last_formal_arg_offset, true));
     }
 
     for (unsigned i = 0; i < ArgLocs.size(); i++) {

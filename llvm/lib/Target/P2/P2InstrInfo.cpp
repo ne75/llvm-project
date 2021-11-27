@@ -54,16 +54,9 @@ void P2InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock
             .addImm(P2::ALWAYS)
             .addImm(P2::NOEFF);
     } else if (TRI->isTypeLegalForClass(*RC, MVT::i64)) {
-        BuildMI(MBB, MI, DL, get(P2::SETQi))
-            .addImm(1)
-            .addImm(P2::ALWAYS);
-
-        BuildMI(MBB, MI, DL, get(P2::RDLONGri))
-            .addReg(TRI->getSubReg(DestReg, P2::sub0))
+        BuildMI(MBB, MI, DL, get(P2::RDDLONG), DestReg)
             .addFrameIndex(FrameIndex)
-            .addMemOperand(MMO)
-            .addImm(P2::ALWAYS)
-            .addImm(P2::NOEFF);
+            .addMemOperand(MMO);
     } else {
         llvm_unreachable("Cannot load this register from a stack slot!");
     }
@@ -117,6 +110,8 @@ void P2InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
     const MachineFrameInfo &MFI = MF.getFrameInfo();
 
+    LLVM_DEBUG(errs() << ">> store reg " << SrcReg << " to stack frame index " << FrameIndex << "\n");
+
     MachineMemOperand *MMO = MF.getMachineMemOperand(
         MachinePointerInfo::getFixedStack(MF, FrameIndex),
         MachineMemOperand::MOStore, MFI.getObjectSize(FrameIndex),
@@ -129,20 +124,13 @@ void P2InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
             .addMemOperand(MMO)
             .addImm(P2::ALWAYS);
     } else if (TRI->isTypeLegalForClass(*RC, MVT::i64)) {
-        BuildMI(MBB, MI, DL, get(P2::SETQi))
-            .addImm(1)
-            .addImm(P2::ALWAYS);
-
-        BuildMI(MBB, MI, DL, get(P2::WRLONGri))
-            .addReg(TRI->getSubReg(SrcReg, P2::sub0), getKillRegState(isKill))
+        BuildMI(MBB, MI, DL, get(P2::WRDLONG))
+            .addReg(SrcReg, getKillRegState(isKill))
             .addFrameIndex(FrameIndex)
-            .addMemOperand(MMO)
-            .addImm(P2::ALWAYS);
+            .addMemOperand(MMO);
     } else {
         llvm_unreachable("Cannot store this register into a stack slot!");
     }
-
-    LLVM_DEBUG(errs() << ">> store reg " << SrcReg << " to stack frame index " << FrameIndex << "\n");
 }
 
 void P2InstrInfo::adjustStackPtr(unsigned SP, int64_t amount, MachineBasicBlock &MBB, MachineBasicBlock::iterator I) const {
@@ -431,12 +419,51 @@ void P2InstrInfo::expand_SEXT64(MachineInstr &MI) const {
     BuildMI(*mbb, MI, dl, get(P2::SARri))
         .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
         .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
-        .addImm(32)
+        .addImm(31)
         .addImm(P2::ALWAYS)
         .addImm(P2::NOEFF);
 
     MI.removeFromParent();
 }
+
+void P2InstrInfo::expand_SEXTIR64(MachineInstr &MI) const {
+    auto mbb = MI.getParent();
+    auto dl = MI.getDebugLoc();
+
+    // first, sign extend the lower word based on operand 2. 
+    // then perform the same as SEXT64 for the upper word, 
+
+    if (MI.getOperand(2).getImm() < 31) {
+        BuildMI(*mbb, MI, dl, get(P2::SIGNXri))
+            .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
+            .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
+            .addImm(MI.getOperand(2).getImm())
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    }
+
+    BuildMI(*mbb, MI, dl, get(P2::MOVrr))
+        .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
+        .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
+        .addImm(P2::ALWAYS)
+        .addImm(P2::NOEFF);
+
+    BuildMI(*mbb, MI, dl, get(P2::ANDri))
+        .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
+        .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
+        .addImm(0x80000000)
+        .addImm(P2::ALWAYS)
+        .addImm(P2::NOEFF);
+
+    BuildMI(*mbb, MI, dl, get(P2::SARri))
+        .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
+        .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
+        .addImm(31)
+        .addImm(P2::ALWAYS)
+        .addImm(P2::NOEFF);    
+
+     MI.removeFromParent();
+}   
 
 void P2InstrInfo::expand_ZEXT64(MachineInstr &MI) const {
     auto mbb = MI.getParent();
@@ -499,6 +526,10 @@ bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
 
         case P2::SEXT64:
             expand_SEXT64(MI);
+            return true;
+
+        case P2::SEXTIR64:
+            expand_SEXTIR64(MI);
             return true;
 
         case P2::ZEXT64:

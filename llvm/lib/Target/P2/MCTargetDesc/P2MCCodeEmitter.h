@@ -26,6 +26,7 @@ namespace llvm {
     class MCInst;
     class MCInstrInfo;
     class MCFixup;
+    class MCSymbol;
     class MCOperand;
     class MCSubtargetInfo;
     class raw_ostream;
@@ -33,8 +34,13 @@ namespace llvm {
     class P2MCCodeEmitter : public MCCodeEmitter {
         P2MCCodeEmitter(const P2MCCodeEmitter &) = delete;
         void operator=(const P2MCCodeEmitter &) = delete;
-        const MCInstrInfo &MCII;
+        // const MCInstrInfo &MCII;
         MCContext &Ctx;
+
+        /**
+         * return if the symbol is referencing the rtlib
+         */
+        bool is_rtlib(const MCSymbol &sym) const;
 
     public:
         P2MCCodeEmitter(const MCInstrInfo &mcii, MCContext &Ctx_)

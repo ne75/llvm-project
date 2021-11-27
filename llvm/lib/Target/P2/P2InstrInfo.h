@@ -37,6 +37,7 @@ namespace llvm {
         void expand_OR64(MachineInstr &MI) const;
         void expand_XOR64(MachineInstr &MI) const;
         void expand_SEXT64(MachineInstr &MI) const;
+        void expand_SEXTIR64(MachineInstr &MI) const;
         void expand_ZEXT64(MachineInstr &MI) const;
         
     public:
