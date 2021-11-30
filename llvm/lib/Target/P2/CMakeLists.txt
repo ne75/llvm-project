@@ -20,6 +20,8 @@ add_llvm_target(P2CodeGen
     P2AsmPrinter.cpp
     P2ExpandPseudos.cpp
     P2DelJmp0.cpp
+    P2InsertAug.cpp
+    P2FinalizeBranches.cpp
     P2FrameLowering.cpp
     P2InstrInfo.cpp
     P2ISelLowering.cpp

@@ -72,6 +72,10 @@ void P2AsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
                         uint64_t Value, bool IsResolved,
                         const MCSubtargetInfo *STI) const {
 
+    LLVM_DEBUG(errs() << "-- applying fixup for ");
+    LLVM_DEBUG(Target.dump(); errs() << "\n");
+
+    LLVM_DEBUG(errs() << "pre-adjusted value is " << Value << "\n");
 
     MCFixupKind Kind = Fixup.getKind();
     Value = adjustFixupValue(Fixup, Value);
@@ -79,9 +83,6 @@ void P2AsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
 
     if (!Value)
         return; // Doesn't change encoding.
-
-    LLVM_DEBUG(errs() << "-- applying fixup for ");
-    LLVM_DEBUG(Target.dump(); errs() << "\n");
 
     LLVM_DEBUG(errs() << "new value is " << Value << "\n");
 

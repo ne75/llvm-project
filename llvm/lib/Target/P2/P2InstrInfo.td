@@ -172,6 +172,8 @@ def : Pat<(sext_inreg P2GPR:$d, i1), (SIGNXri P2GPR:$d, 0, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i8), (SIGNXri P2GPR:$d, 7, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i16), (SIGNXri P2GPR:$d, 15, always, noeff)>;
 
+def : Pat<(i32 (ctlz P2GPR:$s)), (SUBRri (ENCODrr $s, always, noeff), 31, always, noeff)>;
+
 // basic 64 bit support. everything else should either expand or be a libcall
 def : Pat<(add P2GPRPair:$s1, P2GPRPair:$s), (ADD64rr P2GPRPair:$s1, P2GPRPair:$s)>;
 def : Pat<(add P2GPRPair:$s1, i64immleaf:$s), (ADD64ri P2GPRPair:$s1, imm:$s)>;
@@ -186,6 +188,7 @@ def : Pat<(xor P2GPRPair:$s1, i64immleaf:$s), (XOR64ri P2GPRPair:$s1, imm:$s)>;
 
 def : Pat<(i64 (sext P2GPR:$s)), (SEXT64 P2GPR:$s)>;
 def : Pat<(i64 (zext P2GPR:$s)), (ZEXT64 P2GPR:$s)>;
+def : Pat<(i64 (anyext P2GPR:$s)), (ZEXT64 P2GPR:$s)>;
 
 def : Pat<(sext_inreg P2GPRPair:$d, i8), (SEXTIR64 P2GPRPair:$d, 7)>;
 def : Pat<(sext_inreg P2GPRPair:$d, i16), (SEXTIR64 P2GPRPair:$d, 15)>;
@@ -222,15 +225,17 @@ def : Pat<(urem P2GPR:$src1, P2GPR:$src2), (QUREM P2GPR:$src1, P2GPR:$src2)>;
 
 let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
     // don't use the multiclass for this because these don't output to d
-    def CMPrr    : P2InstCZIDS<0b0010000, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmp $d, $s">;
-    def CMPri    : P2InstCZIDS<0b0010000, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmp $d, #$s">;
-    def CMPRrr   : P2InstCZIDS<0b0010100, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpr $d, $s">;
-    def CMPRri   : P2InstCZIDS<0b0010100, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpr $d, #$s">;  
-    def CMPXrr   : P2InstCZIDS<0b0010001, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpx $d, $s">;
-    def CMPXri   : P2InstCZIDS<0b0010001, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpx $d, #$s">;
-
-    def CMPSrr    : P2InstCZIDS<0b0010010, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmps $d, $s">;
-    def CMPSri    : P2InstCZIDS<0b0010010, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmps $d, #$s">;
+    def CMPrr   : P2InstCZIDS<0b0010000, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmp $d, $s">;
+    def CMPri   : P2InstCZIDS<0b0010000, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmp $d, #$s">;
+    def CMPRrr  : P2InstCZIDS<0b0010100, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpr $d, $s">;
+    def CMPRri  : P2InstCZIDS<0b0010100, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpr $d, #$s">;  
+    def CMPXrr  : P2InstCZIDS<0b0010001, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpx $d, $s">;
+    def CMPXri  : P2InstCZIDS<0b0010001, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpx $d, #$s">;
+    
+    def CMPSrr  : P2InstCZIDS<0b0010010, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmps $d, $s">;
+    def CMPSri  : P2InstCZIDS<0b0010010, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmps $d, #$s">;
+    def CMPSXrr : P2InstCZIDS<0b0010011, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpsx $d, $s">;
+    def CMPSXri : P2InstCZIDS<0b0010011, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpsx $d, #$s">;
 }
 
 def JMPr        : P2InstCZD<0b1101011, 0b000101100, (outs), (ins P2GPR:$d), "jmp $d">;
@@ -310,9 +315,9 @@ def : Pat<(brind P2GPR:$d), (JMPr P2GPR:$d, noeff, always)>;
 // these patterns break jump analysis, so might need to do it as a pass later to replace, or update the jump analysis
 // to select these instructions when appropriate
 // test and jump if 0
-// def : Pat<(brcc SETEQ, P2GPR:$lhs, 0, bb:$target), (TJZri P2GPR:$lhs, bb:$target, always)>;
+def : Pat<(brcc SETEQ, P2GPR:$lhs, 0, bb:$target), (TJZri P2GPR:$lhs, bb:$target, always)>;
 // test and jump if not 0
-// def : Pat<(brcc SETNE, P2GPR:$lhs, 0, bb:$target), (TJNZri P2GPR:$lhs, bb:$target, always)>;
+def : Pat<(brcc SETNE, P2GPR:$lhs, 0, bb:$target), (TJNZri P2GPR:$lhs, bb:$target, always)>;
 
 /*--------------------------------*/
 /* moving data                    */

@@ -76,6 +76,8 @@ namespace {
     void P2PassConfig::addPreEmitPass() {
         P2TargetMachine &TM = getP2TargetMachine();
         addPass(createP2DelJmp0Pass(TM));
+        addPass(createP2InsertAugPass(TM));
+        addPass(createP2FinalizeBranchesPass(TM));
     }
 
     void P2PassConfig::addPreRegAlloc() {

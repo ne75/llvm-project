@@ -129,13 +129,8 @@ bool P2AsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
 
 void P2AsmPrinter::emitInstruction(const MachineInstr *MI) {
     // every instruction emits up to two MCInsts, aug is optional. 
-    MCInst aug;
     MCInst I;
-    MCInstLowering.lowerInstruction(*MI, aug, I);
-
-    if (aug.getOpcode() > 0) {
-        EmitToStreamer(*OutStreamer, aug);
-    }
+    MCInstLowering.lowerInstruction(*MI, I);
 
     EmitToStreamer(*OutStreamer, I);
 }

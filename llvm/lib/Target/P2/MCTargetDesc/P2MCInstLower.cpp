@@ -124,66 +124,7 @@ MCOperand P2MCInstLower::lowerOperand(const MachineOperand& MO) const {
     return MCOperand();
 }
 
-void P2MCInstLower::createAugInst(MCInst &aug, int type, int value, int condition) const {
-    assert (type == 1 || type == 2 && "Unknown aug type");
-
-    if (type == 1) {
-        aug.setOpcode(P2::AUGS);
-    } else {
-        aug.setOpcode(P2::AUGD);
-    }
-
-    aug.addOperand(MCOperand::createImm(value));
-    aug.addOperand(MCOperand::createImm(condition));
-    aug.addOperand(MCOperand::createImm(P2::NOEFF));
-}
-
-void P2MCInstLower::createAugInst(const MachineInstr &MI, MCInst &aug, int op_num) const {
-    // 1. Figure out if we need augd or augs
-    assert(canAug(MI) && "Can't create aug for instruction!\n");
-    int aug_type = 0; // 0 = none, 1 = augs, 2 = augd
-
-    bool has_d = P2::hasDField(MI);
-    bool has_s = P2::hasSField(MI);
-    int s_num = P2::getSNum(MI);
-    int d_num = P2::getDNum(MI);
-
-    LLVM_DEBUG(errs() << "has_d = " << has_d << " has_s = " << has_s << " s_num = " << s_num << " d_num = " << d_num << "\n");
-
-    if (has_d && op_num == d_num) {
-        aug_type = 2;
-    } else if (has_s && op_num == s_num) {
-        aug_type = 1;
-    }
-
-    LLVM_DEBUG(errs() << "aug_type = " << aug_type << "\n");
-    
-    // 2. create the MCInst
-    const MachineOperand &MO = MI.getOperand(op_num);
-    int aug_i = 0;
-
-    if (MO.isImm()) { // apply the actual immediate for immediate operands, for others (global address, etc), just insert 0 for later fixup
-        aug_i = (MO.getImm() >> 9) & 0x7fffff;
-    }
-
-    createAugInst(aug, aug_type, aug_i, P2::getCondition(MI));
-}
-
-bool P2MCInstLower::canAug(const MachineInstr &MI) const {
-    int type = P2::getInstructionForm(MI);
-
-    if (type == P2::P2InstN || 
-        type == P2::P2InstWRA ||
-        type == P2::P2InstWRA ||
-        type == P2::P2InstRA ||
-        type == P2::P2InstD || 
-        type == P2::P2InstCZ ||
-        type == P2::P2InstCZD) return false;
-
-    return true;
-}
-
-void P2MCInstLower::lowerInstruction(const MachineInstr &MI, MCInst &AugMI, MCInst &OutMI) const {
+void P2MCInstLower::lowerInstruction(const MachineInstr &MI, MCInst &OutMI) const {
     LLVM_DEBUG(errs() << "Lower instruction from MachineInstr to MCInst\n");
     LLVM_DEBUG(MI.dump());
     LLVM_DEBUG(errs() << "\tOpcode: " << MI.getOpcode() << ", flags: " << MI.getDesc().TSFlags << "\n");
@@ -199,23 +140,6 @@ void P2MCInstLower::lowerInstruction(const MachineInstr &MI, MCInst &AugMI, MCIn
     for (unsigned i = 0, e = MI.getNumOperands(); i != e; ++i) {
         const MachineOperand &MO = MI.getOperand(i);
         MCOperand MCOp = lowerOperand(MO);
-
-        if ((MO.isImm() || MO.isGlobal() || MO.isJTI()) && canAug(MI)) {
-            if (MO.isImm()) {
-                // basic immediates
-                int imm = MCOp.getImm();
-
-                if (imm >> 9) {
-                    LLVM_DEBUG(errs() << "immediate " << imm << " requires an aug\n");
-                    // we need an aug instruction
-                    createAugInst(MI, AugMI, i);
-                    MCOp.setImm(imm & 0x1ff);
-                }
-            } else {
-                // global addresses that require an AUGS/D to be in inserted to be fixedup later
-                createAugInst(MI, AugMI, i);
-            }
-        }
 
         if (MCOp.isValid())
             OutMI.addOperand(MCOp);

@@ -143,10 +143,10 @@ void P2ExpandPseudos::expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::it
         case P2::SETGE:
             if (rhs.isImm()) {
                 cmp_op = P2::CMPSri;
-                cmp_op_hi = P2::CMPXri;
+                cmp_op_hi = P2::CMPSXri;
             } else {
                 cmp_op = P2::CMPSrr;
-                cmp_op_hi = P2::CMPXrr;
+                cmp_op_hi = P2::CMPSXrr;
             }
             break;
         default:
@@ -206,8 +206,6 @@ void P2ExpandPseudos::expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::it
         // 64 bit compare 
         // 1. compare low words, writing cz. 
         // 2. compare high words, with extended op, writing cz
-        // 
-        // if the first compare results in false flags, the second compare will be skipped and the flags maintain the "false" condition. 
         //
         // then, the moves can be correctly executed based on the flags 
         LLVM_DEBUG(errs() << "64 bit condition\n");

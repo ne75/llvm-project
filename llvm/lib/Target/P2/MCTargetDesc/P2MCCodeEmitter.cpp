@@ -87,7 +87,7 @@ unsigned P2MCCodeEmitter::getJumpTargetOpValue(const MCInst &MI, unsigned OpNo, 
         return MO.getImm();
     }
 
-    assert(MO.isExpr() && "getJumpTargetOpValue expects only expressions");
+    assert(MO.isExpr() && "getJumpTargetOpValue expects only expressions if not an immediate");
     LLVM_DEBUG(errs() << "--- creating fixup for jump operand\n");
 
     const MCExpr *Expr = MO.getExpr();
@@ -107,7 +107,7 @@ unsigned P2MCCodeEmitter::getJump9TargetOpValue(const MCInst &MI, unsigned OpNo,
         return MO.getImm();
     }
 
-    assert(MO.isExpr() && "getCogJumpTargetOpValue expects only expressions");
+    assert(MO.isExpr() && "getJump9TargetOpValue expects only expressions if not an immediate");
 
     LLVM_DEBUG(errs() << "--- creating fixup for 9-bit jump operand\n");
 
