@@ -69,10 +69,6 @@ bool DelJmp0::runOnMachineBasicBlock(MachineBasicBlock &MBB, MachineBasicBlock &
         return Changed;
     
     if (I->getOpcode() == P2::JMP && I->getOperand(0).getMBB() == &MBBN) {
-    // I is the instruction of "jmp #offset=0", as follows,
-    //     jmp	$BB0_3
-    // $BB0_3:
-    //     ld	$4, 28($sp)
         ++NumDelJmp;
         MBB.erase(I);	// delete the "JMP 0" instruction
         Changed = true;	// Notify LLVM kernel Changed

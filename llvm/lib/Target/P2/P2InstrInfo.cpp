@@ -216,7 +216,8 @@ void P2InstrInfo::expand_ADD64(MachineInstr &MI) const {
             .addReg(RI.getSubReg(MI.getOperand(1).getReg(), P2::sub0))
             .addImm(MI.getOperand(2).getImm() & 0xffffffff)
             .addImm(P2::ALWAYS)
-            .addImm(P2::WC);
+            .addImm(P2::WC)
+            .addReg(P2::SW, RegState::ImplicitDefine);
         
         BuildMI(*mbb, MI, dl, get(P2::ADDXri))
             .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
@@ -230,7 +231,8 @@ void P2InstrInfo::expand_ADD64(MachineInstr &MI) const {
             .addReg(RI.getSubReg(MI.getOperand(1).getReg(), P2::sub0))
             .addReg(RI.getSubReg(MI.getOperand(2).getReg(), P2::sub0))
             .addImm(P2::ALWAYS)
-            .addImm(P2::WC);
+            .addImm(P2::WC)
+            .addReg(P2::SW, RegState::ImplicitDefine);
 
         BuildMI(*mbb, MI, dl, get(P2::ADDXrr))
             .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
@@ -383,7 +385,7 @@ void P2InstrInfo::expand_XOR64(MachineInstr &MI) const {
         BuildMI(*mbb, MI, dl, get(P2::XORrr))
             .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
             .addReg(RI.getSubReg(MI.getOperand(1).getReg(), P2::sub1))
-            .addReg(RI.getSubReg(MI.getOperand(2).getReg(), P2::sub0))
+            .addReg(RI.getSubReg(MI.getOperand(2).getReg(), P2::sub1))
             .addImm(P2::ALWAYS)
             .addImm(P2::NOEFF);
     }
@@ -527,4 +529,17 @@ bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     } 
 
     return false;
+}
+
+unsigned P2InstrInfo::insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB, MachineBasicBlock *FBB,
+                                      ArrayRef<MachineOperand> Cond, const DebugLoc &DL, int *BytesAdded) const {
+    assert((TBB && FBB == NULL) && "P2 insert branch: only implemented for unconditional branch");
+    assert(Cond.empty() && "P2 insert branch: Cond has non-zero length");
+    assert(!BytesAdded && "P2 insert branch: code size not handled");
+
+    BuildMI(&MBB, DL, get(P2::JMP))
+        .addMBB(TBB)
+        .addImm(1)  // implicit condition that reads the status word, don't care about the value for unconditional jumps
+        .addImm(P2::ALWAYS);    // the actual condition 
+    return 1;
 }

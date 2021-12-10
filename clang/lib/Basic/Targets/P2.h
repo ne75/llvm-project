@@ -30,9 +30,9 @@ public:
       : TargetInfo(Triple) {
         // TODO: fill this out, though most defaults seem to work fine
     // TLSSupported = false;
-    // PointerWidth = 16;
+    // PointerWidth = 32;
     // PointerAlign = 8;
-    // IntWidth = 16;
+    // IntWidth = 32;
     // IntAlign = 8;
     // LongWidth = 32;
     // LongAlign = 8;
@@ -57,6 +57,7 @@ public:
     // WIntType = SignedInt;
     // Char32Type = UnsignedLong;
     // SigAtomicType = SignedChar;
+    BigEndian = false;
     resetDataLayout("e-p:32:32-i32:32");
   }
 

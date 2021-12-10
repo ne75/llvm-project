@@ -68,24 +68,8 @@ though they might be aligned now?
 
 using namespace llvm;
 
-// hasFP - Return true if the specified function should have a dedicated frame
-// pointer register.  This is true if the function has variable sized allocas,
-// if it needs dynamic stack realignment, if frame pointer elimination is
-// disabled, or if the frame address is taken.
-//
-// TODO figure out if this function is actually needed or if can always return a static value
 bool P2FrameLowering::hasFP(const MachineFunction &MF) const {
-    const MachineFrameInfo *MFI = &MF.getFrameInfo();
-    const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
-
-    // LLVM_DEBUG(errs() << "hasFP = disable FP elim: " << MF.getTarget().Options.DisableFramePointerElim(MF) <<
-    //             "; var sized objects: " << MFI->hasVarSizedObjects() <<
-    //             "; frame address is taken: " << MFI->isFrameAddressTaken() <<
-    //             "; needs stack realignment: " << TRI->needsStackRealignment(MF) << "\n");
-
-    return MF.getTarget().Options.DisableFramePointerElim(MF) ||
-            MFI->hasVarSizedObjects() || MFI->isFrameAddressTaken() ||
-            TRI->hasStackRealignment(MF);
+    return false;
 }
 
 void P2FrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const {
@@ -354,57 +338,54 @@ MachineBasicBlock::iterator P2FrameLowering::eliminateCallFramePseudoInstr(Machi
 
     LLVM_DEBUG(errs() << "=== eliminate call frame pseudo\n");
 
-    if (!hasReservedCallFrame(MF)) {
+    int64_t adjust = I->getOperand(0).getImm();
 
-        int64_t adjust = I->getOperand(0).getImm();
+    if (I->getOpcode() == P2::ADJCALLSTACKDOWN) {
+        LLVM_DEBUG(errs() << "Adjust down\n");
+        LLVM_DEBUG(errs() << "block: \n");
+        LLVM_DEBUG(MBB.dump());
 
-        if (I->getOpcode() == P2::ADJCALLSTACKDOWN) {
-            LLVM_DEBUG(errs() << "Adjust down\n");
-            LLVM_DEBUG(errs() << "block: \n");
-            LLVM_DEBUG(MBB.dump());
+        // move backwards until we get to the call instruction
+        adjust = -adjust;
+        I = MBB.erase(I); // erase the psuedo
+        if (I == MBB.end()) I--;
 
-            // move backwards until we get to the call instruction
-            adjust = -adjust;
-            I = MBB.erase(I); // erase the psuedo
-            if (I == MBB.end()) I--;
+        LLVM_DEBUG(errs() << "instruction to check: \n");
+        LLVM_DEBUG(I->dump());
 
-            LLVM_DEBUG(errs() << "instruction to check: \n");
-            LLVM_DEBUG(I->dump());
-
-            auto op = I->getOpcode();
-            while (op != P2::CALL && op != P2::CALLa && op != P2::CALLAa && op != P2::CALLAr && op != P2::CALLr) {
-                I--; // skip back to the call instruction.
-
-                LLVM_DEBUG(errs() << "instruction to check: \n");
-                LLVM_DEBUG(I->dump());
-                op = I->getOpcode();
-            }
-
-            I++; // go forward one to insert after the call
-        } else if (I->getOpcode() == P2::ADJCALLSTACKUP) {
-            LLVM_DEBUG(errs() << "Adjust up\n");
-            LLVM_DEBUG(errs() << "block: \n");
-            LLVM_DEBUG(MBB.dump());
-
-            I = MBB.erase(I); // first erase our psuedo instruction.
+        auto op = I->getOpcode();
+        while (op != P2::CALL && op != P2::CALLa && op != P2::CALLAa && op != P2::CALLAr && op != P2::CALLr) {
+            I--; // skip back to the call instruction.
 
             LLVM_DEBUG(errs() << "instruction to check: \n");
             LLVM_DEBUG(I->dump());
-
-            auto op = I->getOpcode();
-            while (op != P2::CALL && op != P2::CALLa && op != P2::CALLAa && op != P2::CALLAr && op != P2::CALLr) {
-                I++; // skip ahead to the call instruction.
-
-                LLVM_DEBUG(errs() << "instruction to check: \n");
-                LLVM_DEBUG(I->dump());
-                op = I->getOpcode();
-            }
+            op = I->getOpcode();
         }
 
-        // adjust the stack pointer, if necessary
-        if (adjust)
-            tm.getInstrInfo()->adjustStackPtr(P2::PTRA, adjust, MBB, I);
+        I++; // go forward one to insert after the call
+    } else if (I->getOpcode() == P2::ADJCALLSTACKUP) {
+        LLVM_DEBUG(errs() << "Adjust up\n");
+        LLVM_DEBUG(errs() << "block: \n");
+        LLVM_DEBUG(MBB.dump());
+
+        I = MBB.erase(I); // first erase our psuedo instruction.
+
+        LLVM_DEBUG(errs() << "instruction to check: \n");
+        LLVM_DEBUG(I->dump());
+
+        auto op = I->getOpcode();
+        while (op != P2::CALL && op != P2::CALLa && op != P2::CALLAa && op != P2::CALLAr && op != P2::CALLr) {
+            I++; // skip ahead to the call instruction.
+
+            LLVM_DEBUG(errs() << "instruction to check: \n");
+            LLVM_DEBUG(I->dump());
+            op = I->getOpcode();
+        }
     }
+
+    // adjust the stack pointer, if necessary
+    if (adjust)
+        tm.getInstrInfo()->adjustStackPtr(P2::PTRA, adjust, MBB, I);
 
     return I;
 }

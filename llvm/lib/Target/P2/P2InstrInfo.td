@@ -173,6 +173,7 @@ def : Pat<(sext_inreg P2GPR:$d, i8), (SIGNXri P2GPR:$d, 7, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i16), (SIGNXri P2GPR:$d, 15, always, noeff)>;
 
 def : Pat<(i32 (ctlz P2GPR:$s)), (SUBRri (ENCODrr $s, always, noeff), 31, always, noeff)>;
+def : Pat<(i32 (ctpop P2GPR:$s)), (ONESrr $s, always, noeff)>;
 
 // basic 64 bit support. everything else should either expand or be a libcall
 def : Pat<(add P2GPRPair:$s1, P2GPRPair:$s), (ADD64rr P2GPRPair:$s1, P2GPRPair:$s)>;

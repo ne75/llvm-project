@@ -102,6 +102,8 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
     setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
 
+    setOperationAction(ISD::CTTZ, MVT::i32, Expand);
+
     // can expand mul instead of a libcall and it will just become mullo/hi, which we've already created
     // a lowering for
     setOperationAction(ISD::MUL, MVT::i32, Expand);
@@ -149,6 +151,10 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::SELECT, MVT::i64, Custom);
     setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
     setOperationAction(ISD::BR_CC, MVT::i64, Expand);
+    setOperationAction(ISD::BSWAP, MVT::i64, Expand);
+    setOperationAction(ISD::CTTZ, MVT::i64, Expand);
+    setOperationAction(ISD::CTLZ, MVT::i64, Expand);
+    setOperationAction(ISD::CTPOP, MVT::i64, Expand);
 
     // 64 bit libcalls
     setOperationAction(ISD::SRL, MVT::i64, Custom);
