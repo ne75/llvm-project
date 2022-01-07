@@ -25,7 +25,7 @@ P2MCAsmInfo::P2MCAsmInfo(const Triple &TheTriple, const MCTargetOptions &Options
     StackGrowsUp = true;
 
     IsLittleEndian = true;
-    CommentString = "\'\'";
+    CommentString = "\'";
 
     UsesELFSectionDirectiveForBSS = true;
     AllowAtInName = true;
