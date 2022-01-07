@@ -265,10 +265,6 @@ bool P2ExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
                 case P2::QUREM:
                     expand_QUREM(MF, MBBI);
                     break;
-                case P2::SELECTCC:
-                case P2::SELECTCC64:
-                    expand_SELECTCC(MF, MBBI);
-                    break;
             }
 
             MBBI = NMBBI;

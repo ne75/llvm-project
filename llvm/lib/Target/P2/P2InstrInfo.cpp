@@ -476,6 +476,171 @@ void P2InstrInfo::expand_ZEXT64(MachineInstr &MI) const {
     MI.removeFromParent();
 }
 
+/*
+ * expand to:
+ * 
+ * cmp lhs (operand 1), rhs (operand 2)
+ * <false cond code> mov d (operand 0), f (operand 4)
+ * <true cond code> d (operand 0), t (operand 3) based on operand 5
+ */
+void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
+    auto &MRI = MI.getMF()->getRegInfo();
+
+    LLVM_DEBUG(errs()<<"== lower selectcc\n");
+    LLVM_DEBUG(MI.dump());
+
+    const MachineOperand &d = MI.getOperand(0);     // always a register
+    const MachineOperand &lhs = MI.getOperand(1);   // always a register
+    const MachineOperand &rhs = MI.getOperand(2);   // register or immediate
+    const MachineOperand &t = MI.getOperand(3);     // register or immediate
+    const MachineOperand &f = MI.getOperand(4);     // register or immediate
+    int cc = MI.getOperand(5).getImm();             // condition code
+
+    unsigned movt_op = P2::MOVrr;
+    unsigned movf_op = P2::MOVrr;
+    unsigned cmp_op;
+    unsigned cmp_op_hi;
+
+    if (f.isImm()) {
+        movf_op = P2::MOVri;
+    }
+
+    if (t.isImm()) {
+        movt_op = P2::MOVri;
+    }
+
+    switch(cc) {
+        case P2::SETUEQ:
+        case P2::SETUNE:
+        case P2::SETULE:
+        case P2::SETULT:
+        case P2::SETUGT:
+        case P2::SETUGE:
+            if (rhs.isImm()) {
+                cmp_op = P2::CMPri;
+                cmp_op_hi = P2::CMPXri;
+            } else {
+                cmp_op = P2::CMPrr;
+                cmp_op_hi = P2::CMPXrr;
+            }
+            break;
+
+        case P2::SETEQ:
+        case P2::SETNE:
+        case P2::SETLE:
+        case P2::SETLT:
+        case P2::SETGT:
+        case P2::SETGE:
+            if (rhs.isImm()) {
+                cmp_op = P2::CMPSri;
+                cmp_op_hi = P2::CMPSXri;
+            } else {
+                cmp_op = P2::CMPSrr;
+                cmp_op_hi = P2::CMPSXrr;
+            }
+            break;
+        default:
+            llvm_unreachable("unknown condition code in expand_SELECTCC for cmp");
+    }
+
+    int true_cond_imm;
+    int false_cond_imm;
+
+    switch(cc) {
+        case P2::SETUEQ:
+        case P2::SETEQ:
+            true_cond_imm = P2::IF_Z;
+            false_cond_imm = P2::IF_NZ;
+            break;
+        case P2::SETUNE:
+        case P2::SETNE:
+            true_cond_imm = P2::IF_NZ;
+            false_cond_imm = P2::IF_Z;
+            break;
+        case P2::SETULE:
+        case P2::SETLE:
+            true_cond_imm = P2::IF_C_OR_Z;
+            false_cond_imm = P2::IF_NC_AND_NZ;
+            break;
+        case P2::SETULT:
+        case P2::SETLT:
+            true_cond_imm = P2::IF_C;
+            false_cond_imm = P2::IF_NC;
+            break;
+        case P2::SETUGT:
+        case P2::SETGT:
+            true_cond_imm = P2::IF_NC_AND_NZ;
+            false_cond_imm = P2::IF_C_OR_Z;
+            break;
+        case P2::SETUGE:
+        case P2::SETGE:
+            true_cond_imm = P2::IF_NC;
+            false_cond_imm = P2::IF_C;
+            break;
+        default:
+            llvm_unreachable("unknown condition code in expand_SELECTCC for move");
+    }
+
+    // mov false into the destination
+    // this is the 32 bit compare. write a custom routine to build a 64 bit compare that gives the same flag state. 
+    LLVM_DEBUG(errs() << "lhs: ");
+    LLVM_DEBUG(lhs.dump());
+
+    if (RI.getRegClass(P2::P2GPRRegClassID)->contains(lhs.getReg())) {
+        LLVM_DEBUG(errs() << "32 bit condition\n");
+        BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(cmp_op), P2::SW)
+            .addReg(lhs.getReg())
+            .add(rhs)
+            .addImm(P2::ALWAYS).addImm(P2::WCZ);
+    } else {
+        // 64 bit compare 
+        // 1. compare low words, writing cz. 
+        // 2. compare high words, with extended op, writing cz
+        //
+        // then, the moves can be correctly executed based on the flags 
+        LLVM_DEBUG(errs() << "64 bit condition\n");
+
+        if (rhs.isImm()) {
+            // low compare
+            BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(cmp_op), P2::SW)
+                .addReg(RI.getSubReg(lhs.getReg(), P2::sub0))
+                .addImm(rhs.getImm() & 0xffffffff)
+                .addImm(P2::ALWAYS).addImm(P2::WCZ);
+
+            // high compare
+            BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(cmp_op_hi), P2::SW)
+                .addReg(RI.getSubReg(lhs.getReg(), P2::sub1))
+                .addImm(rhs.getImm() >> 32)
+                .addImm(P2::ALWAYS).addImm(P2::WCZ);
+        } else {
+            // low compare
+            BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(cmp_op), P2::SW)
+                .addReg(RI.getSubReg(lhs.getReg(), P2::sub0))
+                .addReg(RI.getSubReg(rhs.getReg(), P2::sub0))
+                .addImm(P2::ALWAYS).addImm(P2::WCZ);
+
+            // high compare
+            BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(cmp_op_hi), P2::SW)
+                .addReg(RI.getSubReg(lhs.getReg(), P2::sub1))
+                .addReg(RI.getSubReg(rhs.getReg(), P2::sub1))
+                .addImm(P2::ALWAYS).addImm(P2::WCZ);
+        }
+    }
+
+    BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(movt_op), d.getReg())
+        .add(t)
+        .addImm(true_cond_imm)
+        .addImm(P2::NOEFF);
+
+    BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(movf_op))
+        .addReg(d.getReg())
+        .add(f)
+        .addImm(false_cond_imm)
+        .addImm(P2::NOEFF);
+
+    MI.eraseFromParent();
+}
+
 bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     switch(MI.getOpcode()) {
         case P2::ADD64ri:
@@ -525,6 +690,11 @@ bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
 
         case P2::ZEXT64:
             expand_ZEXT64(MI);
+            return true;
+
+        case P2::SELECTCC:
+        case P2::SELECTCC64:
+            expand_SELECTCC(MI);
             return true;
     } 
 

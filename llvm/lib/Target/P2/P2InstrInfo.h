@@ -39,6 +39,7 @@ namespace llvm {
         void expand_SEXT64(MachineInstr &MI) const;
         void expand_SEXTIR64(MachineInstr &MI) const;
         void expand_ZEXT64(MachineInstr &MI) const;
+        void expand_SELECTCC(MachineInstr &MI) const;
         
     public:
         explicit P2InstrInfo();
