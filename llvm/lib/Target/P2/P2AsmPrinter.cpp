@@ -59,7 +59,7 @@ void P2AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostre
 
     switch (MO.getType()) {
         case MachineOperand::MO_Register:
-            O << "$" << P2InstPrinter::getRegisterName(MO.getReg());
+            O << P2InstPrinter::getRegisterName(MO.getReg());
             break;
         case MachineOperand::MO_Immediate:
             O << "#" << MO.getImm();
