@@ -94,8 +94,8 @@ void P2FrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) 
     }
 
     // the stack gets preallocated for incoming arguments + 4 bytes for the PC/SW + regs already saved to the stack,
-    // so don't allocate that in the prologue
-    uint64_t StackSize = MFI.getStackSize() - 4 - P2FI->getIncomingArgSize() - P2FI->getCalleeSavedFrameSize();
+    // and arguments pushed to the stack for function calls so don't allocate that in the prologue
+    uint64_t StackSize = MFI.getStackSize() - 4 - P2FI->getIncomingArgSize() - P2FI->getCalleeSavedFrameSize() - P2FI->getCallArgFrameSize();
     LLVM_DEBUG(errs() << "Allocating " << StackSize << " bytes for stack (original value: " << MFI.getStackSize() << ")\n");
 
     // No need to allocate space on the stack.
@@ -119,7 +119,7 @@ void P2FrameLowering::emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) 
     P2FunctionInfo *P2FI = MF.getInfo<P2FunctionInfo>();
 
     const P2InstrInfo *TII = MF.getSubtarget<P2Subtarget>().getInstrInfo();
-    uint64_t StackSize = MFI.getStackSize() - 4 - P2FI->getIncomingArgSize() - P2FI->getCalleeSavedFrameSize();
+    uint64_t StackSize = MFI.getStackSize() - 4 - P2FI->getIncomingArgSize() - P2FI->getCalleeSavedFrameSize() - P2FI->getCallArgFrameSize();
 
     LLVM_DEBUG(errs() << "epilogue mbb\n");
     LLVM_DEBUG(MBB.dump());

@@ -36,7 +36,7 @@ P2TargetMachine::P2TargetMachine(const Target &T, const Triple &TT, StringRef CP
                                      const TargetOptions &Options,
                                      Optional<Reloc::Model> RM,
                                      Optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT) :
-                        LLVMTargetMachine(T, "e-p:32:32-i32:32", TT, CPU, FS, Options, Reloc::Static, CodeModel::Small, OL),
+                        LLVMTargetMachine(T, "e-p:32:32-i32:32-i64:32", TT, CPU, FS, Options, Reloc::Static, CodeModel::Small, OL),
                         TLOF(std::make_unique<P2TargetObjectFile>()),
                         subtarget(TT, std::string(CPU), std::string(FS), *this) {
     initAsmInfo();

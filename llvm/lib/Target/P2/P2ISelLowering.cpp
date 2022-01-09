@@ -343,8 +343,7 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     MachineFunction &MF = DAG.getMachineFunction();
     // MachineFrameInfo *MFI = &MF.getFrameInfo();
     const TargetFrameLowering *TFL = MF.getSubtarget().getFrameLowering();
-    //P2FunctionInfo *FuncInfo = MF.getInfo<P2FunctionInfo>();
-    //P2FunctionInfo *P2FI = MF.getInfo<P2FunctionInfo>();
+    P2FunctionInfo *P2FI = MF.getInfo<P2FunctionInfo>();
 
     LLVM_DEBUG(errs() << "=== Lower Call\n");
 
@@ -437,6 +436,9 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                 SDValue ops[] = {StackPtr, DAG.getConstant(off, DL, MVT::i32, true), cond, eff};
                 PtrOff = SDValue(DAG.getMachineNode(P2::ADDri, DL, vt, ops), 0);
             }
+
+            // save how many bytes of the call will allocated
+            P2FI->setCallArgFrameSize(P2FI->getCallArgFrameSize() + arg_size);
 
             if (Flags.isByVal()) {
                 LLVM_DEBUG(errs() << "Argument is byval of size " << Flags.getByValSize() << "\n");
