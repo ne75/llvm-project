@@ -404,18 +404,19 @@ bool P2AsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name, S
         }
     }
 
-    effect_loc = getLexer().getLoc();
+    
     // if there's another token, see if it's the effect flag.
-    StringRef effect_flag = "";
     if (getLexer().isNot(AsmToken::EndOfStatement)) {
-        effect_flag = getLexer().getTok().getString();
         effect_loc = getLexer().getLoc();
-        Parser.Lex(); // eat the effect flag
+
+        StringRef effect_flag;
+        if (Parser.parseIdentifier(effect_flag)) {
+            return Error(effect_loc, "unexpected token in argument list");; // failed to parse identifier
+        }
 
         if (P2::effect_string_map.find(effect_flag) == P2::effect_string_map.end()) {
-            SMLoc Loc = getLexer().getLoc();
             Parser.eatToEndOfStatement();
-            return Error(Loc, "unexpected token for effect flag");
+            return Error(effect_loc, "unexpected token for effect flag");
         }
 
         LLVM_DEBUG(errs() << "got effect flag\n");
@@ -560,11 +561,12 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
         default:
             Error(Parser.getTok().getLoc(), "unexpected token in operand");
             return true;
-        case AsmToken::Dollar: {
-            LLVM_DEBUG(errs() << "operand token is a $\n");
+        case AsmToken::Dollar:
+            Parser.Lex(); // eat the dollar sign
+            [[clang::fallthrough]];
+        case AsmToken::Identifier: {
             // parse register
             SMLoc S = Parser.getTok().getLoc();
-            Parser.Lex(); // Eat dollar token.
 
             // parse register operand
             if (!tryParseRegisterOperand(Operands, Mnemonic)) {
@@ -574,13 +576,22 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
             // maybe it is a symbol reference
             StringRef Identifier;
             if (Parser.parseIdentifier(Identifier)) {
-                return true; // fail
+                return true; // failed to parse identifier
+            }
+            
+            SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
+
+            // is this an effect flag? 
+            if (P2::effect_string_map.find(Identifier) != P2::effect_string_map.end()) {
+                LLVM_DEBUG(errs() << "got effect flag\n");
+                const MCConstantExpr *eff_expr = MCConstantExpr::create(P2::effect_string_map[Identifier], getContext());
+                Operands.push_back(P2Operand::CreateImm(eff_expr, S, E));
+                return false; // success
             }
 
-            SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
+            // Otherwise create a symbol ref
             MCSymbol *Sym = getContext().getOrCreateSymbol("$" + Identifier);
 
-            // Otherwise create a symbol ref.
             const MCExpr *Res = MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None,getContext());
             Operands.push_back(P2Operand::CreateImm(Res, S, E));
             return false;
