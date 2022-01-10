@@ -26,11 +26,7 @@
 
 using namespace llvm;
 
-P2TargetStreamer::P2TargetStreamer(MCStreamer &S) : MCTargetStreamer(S) {
+P2TargetStreamer::P2TargetStreamer(MCStreamer &S) : MCTargetStreamer(S) {}
 
-}
-
-P2TargetAsmStreamer::P2TargetAsmStreamer(MCStreamer &S) : P2TargetStreamer(S) {
-
-}
+P2TargetAsmStreamer::P2TargetAsmStreamer(MCStreamer &S) : P2TargetStreamer(S) {}
 

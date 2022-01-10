@@ -65,9 +65,6 @@ MCOperand P2MCInstLower::lowerSymbolOperand(const MachineOperand &MO, MachineOpe
         break;
 
         case MachineOperand::MO_ExternalSymbol:
-            // for now, assume all external symbols are libcalls. Any actual functions get treated as global addresses.
-            // I don't know if this will break something down the line. So when getting the call target,
-            // check if the symbol is external and if it is, encode the call target with a different fixup
             LLVM_DEBUG(errs() << "external symbol: " << MO.getSymbolName() << "\n");
             Symbol = AsmPrinter.GetExternalSymbolSymbol(MO.getSymbolName());
             Symbol->setExternal(true);

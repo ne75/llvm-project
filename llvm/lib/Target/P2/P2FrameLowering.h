@@ -30,10 +30,8 @@ namespace llvm {
             : TargetFrameLowering(StackGrowsUp, Align(1), 0), tm(TM) {
         }
 
-        bool hasFP(const MachineFunction &MF) const override;
+        bool hasFP(const MachineFunction &MF) const override {return false;};
 
-        /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
-        /// the function.
         void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
         void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
 

@@ -53,8 +53,6 @@ bool P2AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
 }
 
 void P2AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostream &O) {
-    // TODO: for rd/wrlong/word/byte instructions, print out the special immediate as a string instead of 
-    // as a plane immediate. That will require the reverse to be parsed in AsmParser as well...
     const MachineOperand &MO = MI->getOperand(OpNo);
 
     switch (MO.getType()) {
@@ -80,8 +78,7 @@ void P2AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostre
 
 bool P2AsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
                                     const char *ExtraCode, raw_ostream &O) {
-    // Default asm printer can only deal with some extra codes,
-    // so try it first.
+    // Default asm printer can only deal with some extra codes, so try it first.
     bool Error = AsmPrinter::PrintAsmOperand(MI, OpNum, ExtraCode, O);
 
     const MachineOperand &MO = MI->getOperand(OpNum);

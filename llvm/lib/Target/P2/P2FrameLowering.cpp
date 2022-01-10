@@ -29,48 +29,9 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetOptions.h"
 
-/*
-How the call stack will work:
-
-The stack will grow up. regsiter sp always points to the TOP of the stack, which is the start of free stack space.
-Selection will generate FRMIDX pseudo instructions that will be lowered in register info by be subtracting from the
-current stack pointer (sp) by the frame index offset. The callee will not save any regsiters it uses. The data in the stack frame
-will be organized as follows:
-SP ----------> ----------------- (4)
-                local variables
-                ...
-               ----------------- (3)
-                callee saved regs
-                ...
-               ----------------- (2)
-                return address (pushed automatically)
-               ----------------- (1)
-                arguments into function (descending).
-                formal arguments come first (highest in the stack)
-                followed by variable argument (last var arg is lowest in the stack)
-                ...
-SP (previous)  -----------------
-
-Here's the ordering of sp adjustment: when calling, SP (previous) is adjusted for arguments (1). The function is called and return address
-(and status word) is pushed onto the stack with the call (2). The function then allocates space it needs to save registers (3), and local
-variables (4). SP now becomes SP (previous) when getting
-ready to call another function.
-
-Callee saved register spilling/restoring is done via setq and wrlong/rdlong to do a block transfer of
-registers to memory. determine callee saves gives us a list of regsiters to save and their frame indices. We count up the number of
-continuous registers that need to be saved in a single setq/wrlong pair. Restoring does the same thing in reverse.
-Eventually, we might need to adjust determine callee saves to line up the register blocks with their corresponing frame indicies,
-though they might be aligned now?
-
-*/
-
 #define DEBUG_TYPE "p2-frame-lower"
 
 using namespace llvm;
-
-bool P2FrameLowering::hasFP(const MachineFunction &MF) const {
-    return false;
-}
 
 void P2FrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const {
     LLVM_DEBUG(dbgs() << "Emit Prologue: " << MF.getName() << "\n");

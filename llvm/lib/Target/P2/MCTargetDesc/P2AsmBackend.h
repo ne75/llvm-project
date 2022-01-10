@@ -57,9 +57,6 @@ namespace llvm {
             llvm_unreachable("RelaxInstruction() unimplemented");
             return false;
         }
-        //bool shouldForceRelocation(const MCAssembler &Asm, const MCFixup &Fixup, const MCValue &Target) override;
-
-        //void relaxInstruction(const MCInst &Inst, const MCSubtargetInfo &STI, MCInst &Res) const override {}
 
         bool writeNopData(raw_ostream &OS, uint64_t Count, const MCSubtargetInfo *STI) const override;
     };

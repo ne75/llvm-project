@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file declares the AVR specific subclass of TargetMachine.
+// This file declares the P2 specific subclass of TargetMachine.
 //
 //===----------------------------------------------------------------------===//
 

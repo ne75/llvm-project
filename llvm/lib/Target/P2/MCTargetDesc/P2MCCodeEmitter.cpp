@@ -10,7 +10,6 @@
 // This file implements the P2MCCodeEmitter class.
 //
 //===----------------------------------------------------------------------===//
-//
 
 #include "P2MCCodeEmitter.h"
 #include "P2Subtarget.h"

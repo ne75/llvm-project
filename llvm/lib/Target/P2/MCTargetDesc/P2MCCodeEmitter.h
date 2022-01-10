@@ -10,7 +10,6 @@
 // This file defines the P2MCCodeEmitter class.
 //
 //===----------------------------------------------------------------------===//
-//
 
 #ifndef LLVM_LIB_TARGET_P2_MCTARGETDESC_P2MCCODEEMITTER_H
 #define LLVM_LIB_TARGET_P2_MCTARGETDESC_P2MCCODEEMITTER_H

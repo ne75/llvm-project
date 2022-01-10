@@ -22,14 +22,6 @@
 #include "llvm/IR/Type.h"
 #include "llvm/Support/Debug.h"
 
-//===----------------------------------------------------------------------===//
-// Instruction Selector Implementation
-//===----------------------------------------------------------------------===//
-
-//===----------------------------------------------------------------------===//
-// P2DAGToDAGISel - P2 specific code to select P2 machine
-// instructions for SelectionDAG operations.
-//===----------------------------------------------------------------------===//
 namespace llvm {
 
     class StringRef;

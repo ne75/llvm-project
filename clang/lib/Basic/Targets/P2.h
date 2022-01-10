@@ -58,7 +58,7 @@ public:
     // Char32Type = UnsignedLong;
     // SigAtomicType = SignedChar;
     BigEndian = false;
-    resetDataLayout("e-p:32:32-i32:32");
+    resetDataLayout("e-p:32:32-i32:32-i64:32");
   }
 
   void getTargetDefines(const LangOptions &Opts, MacroBuilder &Builder) const override;

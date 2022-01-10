@@ -31,20 +31,6 @@ namespace llvm {
 
         MCOperand lowerSymbolOperand(const MachineOperand &MO, MachineOperandType MOTy) const;
 
-        /**
-         * Generate an augs or augd to modify the operand in MI given by op_num. 
-         */
-        void createAugInst(const MachineInstr &MI, MCInst &aug, int op_num) const;
-
-        /**
-         * create a basic aug instruction with given type and value
-         */
-        void createAugInst(MCInst &aug, int type, int value, int condition=P2::ALWAYS) const ;
-
-        /**
-         * return true if the instruction can by augmented with augs/d
-         */
-        bool canAug(const MachineInstr &MI) const;
     public:
         P2MCInstLower(P2AsmPrinter &asmprinter);
         void Initialize(MCContext* C);

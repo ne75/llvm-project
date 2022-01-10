@@ -33,21 +33,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 
-/*
-it feels like there's a lot of redundant code here, so we should dig through what ever piece does and clean things up
-
-How function calling works:
-
-1. LowerCall is used to copy arguments to there destination registers/stack space
-2. LowerFormalArguments is used to copy passed argument by the callee into the callee's stack frame
-3. LowerReturn is used to copy the return value to r31 or the stack
-4. LowerCallResult used to copy the return value out of r31 or the stack into the caller's space
-
-Byval arguments: byvals will always be passed by the stack. easier this way for now, since most structs will be
-greater than 4 ints anyway
-
-*/
-
 using namespace llvm;
 
 #define DEBUG_TYPE "p2-isel-lower"
@@ -84,7 +69,7 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::LOAD, MVT::i64, Legal);
     setOperationAction(ISD::STORE, MVT::i64, Legal);
 
-    // See https://llvm.org/doxygen/TargetLowering_8h_source.html#l00192 for the various action
+    // See https://llvm.org/doxygen/TargetLowering_8h_source.html#l00192 for the various actions
     setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
     setOperationAction(ISD::MULHS, MVT::i32, Expand);
@@ -295,12 +280,6 @@ SDValue P2TargetLowering::lowerSelect64(SDValue Op, SelectionDAG &DAG) const {
     return res;
 }
 
-#include "P2GenCallingConv.inc"
-
-//===----------------------------------------------------------------------===//
-//                  CALL Calling Convention Implementation
-//===----------------------------------------------------------------------===//
-
 SDValue P2TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     switch (Op.getOpcode()) {
         case ISD::GlobalAddress:
@@ -325,6 +304,12 @@ SDValue P2TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     return SDValue();
 }
 
+#include "P2GenCallingConv.inc"
+
+//===----------------------------------------------------------------------===//
+//                  CALL Calling Convention Implementation
+//===----------------------------------------------------------------------===//
+
 /// LowerCall - functions arguments are copied from virtual regs to
 /// physical regs and/or the stack frame, CALLSEQ_START and CALLSEQ_END are emitted.
 SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
@@ -341,7 +326,6 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     bool &isTailCall                      = CLI.IsTailCall;
 
     MachineFunction &MF = DAG.getMachineFunction();
-    // MachineFrameInfo *MFI = &MF.getFrameInfo();
     const TargetFrameLowering *TFL = MF.getSubtarget().getFrameLowering();
     P2FunctionInfo *P2FI = MF.getInfo<P2FunctionInfo>();
 
@@ -467,7 +451,6 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
     // node so that legalize doesn't hack it.
     bool GlobalOrExternal = false, InternalLinkage = false;
-    // SDValue CalleeLo;
 
     if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
         Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, getPointerTy(DAG.getDataLayout()), 0);
@@ -850,8 +833,6 @@ Register P2TargetLowering::getRegisterByName(StringRef RegName) const {
 
 Register P2TargetLowering::getRegisterByName(const char *RegName, LLT VT, const MachineFunction &MF) const {
     return getRegisterByName(RegName);
-
-    report_fatal_error("Invalid register name global variable");
 }
 
 /// getConstraintType - Given a constraint letter, return the type of
@@ -929,13 +910,7 @@ std::pair<unsigned, const TargetRegisterClass *> P2TargetLowering::getRegForInli
                 break;
         }
     }
-
-    // std::pair<unsigned, const TargetRegisterClass *> R;
-    // R = parseRegForInlineAsmConstraint(TRI, Constraint);
-
-    // if (R.second)
-    //     return R;
-
+    
     int R = getRegisterByName(Constraint.substr(1, Constraint.size()-1));
     if (R != -1) return std::make_pair(R, TRI->getRegClass(P2::P2GPRRegClassID));
 

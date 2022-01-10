@@ -58,7 +58,6 @@ class P2FunctionInfo : public MachineFunctionInfo {
     /// this function is intended to be loaded directly into a cog
     bool cogex;
 
-    mutable int DynAllocFI; // Frame index of dynamically allocated stack area.
     bool EmitNOAT;
     unsigned MaxCallFrameSize;
 
@@ -71,8 +70,8 @@ public:
         IncomingArgSize(0),
         CalleeSavedFrameSize(0),
         EmitNOAT(false),
-        MaxCallFrameSize(0),
-        CallArgFrameSize(0)
+        CallArgFrameSize(0),
+        MaxCallFrameSize(0)
         {
             cogex = MF.getFunction().hasFnAttribute(Attribute::Cogmain) || MF.getFunction().hasFnAttribute(Attribute::Cogtext);
         }

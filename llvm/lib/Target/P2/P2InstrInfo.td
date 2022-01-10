@@ -6,10 +6,6 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-// This file contains the P2 implementation of the TargetInstrInfo class.
-//
-//===----------------------------------------------------------------------===//
 
 include "P2InstrFormats.td"
 

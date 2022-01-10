@@ -5,11 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-///
-/// \file
-/// This file contains the declaration of the P2InstPrinter class,
-/// which is used to print P2 MCInst to a .s file.
-///
+//
+// This file contains the declaration of the P2InstPrinter class,
+// which is used to print P2 MCInst to a .s file.
+//
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_LIB_TARGET_P2_P2INSTPRINTER_H

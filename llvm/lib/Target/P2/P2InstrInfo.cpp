@@ -476,7 +476,7 @@ void P2InstrInfo::expand_ZEXT64(MachineInstr &MI) const {
     MI.removeFromParent();
 }
 
-/*
+/**
  * expand to:
  * 
  * cmp lhs (operand 1), rhs (operand 2)
@@ -484,8 +484,6 @@ void P2InstrInfo::expand_ZEXT64(MachineInstr &MI) const {
  * <true cond code> d (operand 0), t (operand 3) based on operand 5
  */
 void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
-    auto &MRI = MI.getMF()->getRegInfo();
-
     LLVM_DEBUG(errs()<<"== lower selectcc\n");
     LLVM_DEBUG(MI.dump());
 
@@ -581,12 +579,9 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
             llvm_unreachable("unknown condition code in expand_SELECTCC for move");
     }
 
-    // mov false into the destination
-    // this is the 32 bit compare. write a custom routine to build a 64 bit compare that gives the same flag state. 
-    LLVM_DEBUG(errs() << "lhs: ");
-    LLVM_DEBUG(lhs.dump());
-
+    // Compare operands
     if (RI.getRegClass(P2::P2GPRRegClassID)->contains(lhs.getReg())) {
+        // this is the 32 bit compare.
         LLVM_DEBUG(errs() << "32 bit condition\n");
         BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(cmp_op), P2::SW)
             .addReg(lhs.getReg())
@@ -627,11 +622,13 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
         }
     }
 
+    // move true value (if true)
     BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(movt_op), d.getReg())
         .add(t)
         .addImm(true_cond_imm)
         .addImm(P2::NOEFF);
 
+    // move false value (if false)
     BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(movf_op))
         .addReg(d.getReg())
         .add(f)

@@ -47,8 +47,7 @@ void P2DAGToDAGISel::selectMultiplication(SDNode *N) {
     MVT vt = N->getSimpleValueType(0);
 
     assert(vt == MVT::i32 && "unexpected value type");
-    bool isSigned = N->getOpcode() == ISD::SMUL_LOHI;
-    unsigned op = isSigned ? P2::QMULrr : P2::QMULrr; // FIXME: replace with signed multiplication node (which will be a pseudo maybe?) (it might not be needed)
+    unsigned op = P2::QMULrr;
 
     SDValue cond = CurDAG->getTargetConstant(P2::ALWAYS, DL, vt);
 
@@ -138,7 +137,7 @@ void P2DAGToDAGISel::Select(SDNode *N) {
         return;
     }
 
-    /*
+    /**
      * Instruction Selection not handled by the auto-generated
      * tablegen selection should be handled here.
      */
@@ -158,6 +157,7 @@ void P2DAGToDAGISel::Select(SDNode *N) {
         }
 
         // Mul with two results
+        // Do we actaully need this? 
         case ISD::SMUL_LOHI:
         case ISD::UMUL_LOHI: {
             selectMultiplication(N);

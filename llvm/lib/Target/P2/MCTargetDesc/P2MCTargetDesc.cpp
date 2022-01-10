@@ -95,8 +95,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeP2TargetMC() {
     TargetRegistry::RegisterMCRegInfo(getTheP2Target(), createP2MCRegisterInfo);
     // Register the MC subtarget info.
     TargetRegistry::RegisterMCSubtargetInfo(getTheP2Target(), createP2MCSubtargetInfo);
-    // Register the MC instruction analyzer.
-    // TargetRegistry::RegisterMCInstrAnalysis(getTheP2Target(), createP2MCInstrAnalysis);
     // Register the MCInstPrinter.
     TargetRegistry::RegisterMCInstPrinter(getTheP2Target(), createP2MCInstPrinter);
     // Register the elf streamer.
