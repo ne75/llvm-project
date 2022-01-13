@@ -609,8 +609,6 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
             }
 
             Parser.Lex(); // eat the #
-            
-            Operands.push_back(P2Operand::CreateToken("/#", S));
 
             const MCExpr *IdVal;
             S = Parser.getTok().getLoc();
@@ -626,7 +624,6 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
             // is an immediate expression, so first create the token for the #
             SMLoc S = Parser.getTok().getLoc();
             Parser.Lex(); // eat the pound sign
-            Operands.push_back(P2Operand::CreateToken("#", S));
 
             const MCExpr *IdVal;
             S = Parser.getTok().getLoc();

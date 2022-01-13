@@ -550,8 +550,8 @@ let Uses = [SW] in {
 }
 
 def NOP         : P2InstNOP;
-def AUGS        : P2InstN<0b11110, (outs), (ins i32imm:$n), "augs $n">;
-def AUGD        : P2InstN<0b11111, (outs), (ins i32imm:$n), "augd $n">;
+def AUGS        : P2InstN<0b11110, (outs), (ins i32imm:$d), "augs $d">;
+def AUGD        : P2InstN<0b11111, (outs), (ins i32imm:$d), "augd $d">;
 
 def FRMIDX      : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src), "frmidx $dst, $src">;
 

@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "P2.h"
+#include "MCTargetDesc/P2BaseInfo.h"
 #include "P2MachineFunctionInfo.h"
 #include "P2RegisterInfo.h"
 #include "P2TargetMachine.h"
@@ -136,13 +137,13 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
                                 .addImm(P2::ALWAYS)
                                 .addImm(P2::NOEFF);
     } else if ((op == P2::WRLONGri) || (op == P2::RDLONGri) || (op == P2::WRLONGii)) {
-        int imm = 0x8;
+        int imm = 0;
         offset *= -1;
 
         // offset can be up to 128, since the index for the special immediate is scaled by 4 when using rdlong/wrlong
         // later we can make this more generic for bytes and words too--adjusting the scale appropriately
         if (offset/4 > 31 || offset/4 < -32) {
-            imm <<= 20;
+            imm = P2::PTRA_INDEX6_AUGS;
             imm += (offset) & 0xfffff; // offset is unscaled when using augs
 
             BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::AUGS))
@@ -151,7 +152,7 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
 
             MI.getOperand(1).ChangeToImmediate(imm & 0x1ff);
         } else {
-            imm <<= 5;
+            imm = P2::PTRA_INDEX6;
             imm += (offset/4) & 0x3f;
 
             MI.getOperand(1).ChangeToImmediate(imm & 0x1ff);

@@ -27,6 +27,17 @@ using namespace llvm;
 
 #include "P2GenAsmWriter.inc"
 
+static bool isMIRandomAccess(const MCInst *MI) {
+    auto opc = MI->getOpcode();
+
+    if (opc == P2::RDBYTEri || opc == P2::RDWORDri || opc == P2::RDLONGri ||
+        opc == P2::WRBYTEri || opc == P2::WRWORDri || opc == P2::WRLONGri ||
+        opc == P2::WRBYTEii || opc == P2::WRWORDii || opc == P2::WRLONGii) 
+        return true;
+
+    return false;
+}
+
 void P2InstPrinter::printRegName(raw_ostream &OS, unsigned RegNo) const {
     auto reg_val = MRI.getEncodingValue(RegNo);
     if (reg_val < 0x1d0) {
@@ -85,7 +96,27 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
     }
 
     if (Op.isImm()) {
-        O << Op.getImm();
+        if (isMIRandomAccess(MI)) {
+            if (Op.getImm() == P2::PTRA_POSTINC) {
+                O << "ptra++";
+                return;
+            }
+
+            if (Op.getImm() == P2::PTRA_PREDEC) {
+                O << "--ptra";
+                return;
+            }   
+
+            if ((Op.getImm() & 0x1c0) == P2::PTRA_INDEX6) {
+                int idx = Op.getImm() & 0x3f;
+                if (idx > 31) idx -= 64;
+
+                O << "ptra[" << idx << "]";
+                return;
+            }
+        }
+
+        O << "#" << Op.getImm();
         return;
     }
 

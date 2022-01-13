@@ -29,8 +29,8 @@ namespace llvm {
         enum name {
             PTRA_POSTINC = 0x161,
             PTRA_PREDEC = 0x15f,
-            PTRA_INDEX = 0x100, 
-            PTRA_INDEX_AUGS = 0x800000
+            PTRA_INDEX6 = 0x100, 
+            PTRA_INDEX6_AUGS = 0x800000
         };
 
         // Map LLVM's condition code to immediate operands for expanding instructions with condition codes
