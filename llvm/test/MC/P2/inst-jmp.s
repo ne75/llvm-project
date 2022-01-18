@@ -19,7 +19,7 @@ test:
 	if_c_or_nz jmp #1
 	if_c_or_z jmp #1
 	jmp #1
-	_ret_ jmp /#1
+	_ret_ jmp #\1
 
 
 ' CHECK: _ret_ jmp #1 ' encoding: [0x01,0x00,0x90,0x0d]
@@ -86,6 +86,6 @@ test:
 ' CHECK-INST: jmp #1
 
 
-' CHECK: _ret_ jmp /#1 ' encoding: [0x01,0x00,0x80,0x0d]
-' CHECK-INST: _ret_ jmp /#1
+' CHECK: _ret_ jmp #\1 ' encoding: [0x01,0x00,0x80,0x0d]
+' CHECK-INST: _ret_ jmp #\1
 

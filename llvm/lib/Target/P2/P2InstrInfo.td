@@ -18,19 +18,44 @@ def SDT_P2Mov : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
 def SDT_P2CallSeqStart : SDCallSeqStart<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
 def SDT_P2CallSeqEnd : SDCallSeqEnd<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
 
-def jmptarget    : Operand<OtherVT> {
+def P2RelAddrOperand : AsmOperandClass {
+    let Name = "RelAddr";
+    let PredicateMethod = "isImm";
+    let RenderMethod = "addImmOperands";
+}
+
+def P2AbsAddrOperand : AsmOperandClass {
+    let Name = "AbsAddr";
+    let PredicateMethod = "isAbsAddr";
+    let RenderMethod = "addImmOperands";
+}
+
+def absjmptarget    : Operand<OtherVT> {
     let EncoderMethod = "getJumpTargetOpValue";
-    let OperandType = "OPERAND_PCREL";
+    let OperandType = "OPERAND_IMMEDIATE";
+    let ParserMatchClass = P2AbsAddrOperand;
+}
+
+def reljmptarget    : Operand<OtherVT> {
+    let EncoderMethod = "getJumpTargetOpValue";
+    let OperandType = "OPERAND_IMMEDIATE";
+    let ParserMatchClass = P2RelAddrOperand;
 }
 
 def jmp9target    : Operand<OtherVT> {
     let EncoderMethod = "getJump9TargetOpValue";
     let DecoderMethod = "decodeJump9Target";
-    let OperandType = "OPERAND_PCREL";
+    let OperandType = "OPERAND_IMMEDIATE";
 }
 
-def calltarget : Operand<iPTR> {
+def abscalltarget : Operand<iPTR> {
     let EncoderMethod = "encodeCallTarget";
+    let ParserMatchClass = P2AbsAddrOperand;
+}
+
+def relcalltarget : Operand<iPTR> {
+    let EncoderMethod = "encodeCallTarget";
+    let ParserMatchClass = P2RelAddrOperand;
 }
 
 def NegateImm : SDNodeXForm<imm, [{return CurDAG->getConstant(-N->getSExtValue(), SDLoc(N), MVT::i32, true);}]>;
@@ -238,8 +263,8 @@ let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
 def JMPr        : P2InstCZD<0b1101011, 0b000101100, (outs), (ins P2GPR:$d), "jmp $d">;
 
 let DecoderMethod = "DecodeJumpInstruction", isBarrier = 1, isBranch = 1, isTerminator = 1 in {
-    def JMP     : P2InstRA<0b1101100, 0b1, (outs), (ins jmptarget:$d, P2Implicit:$cmp), "jmp $d">; // relative address jump
-    def JMPa    : P2InstRA<0b1101100, 0b0, (outs), (ins jmptarget:$d, P2Implicit:$cmp), "jmp $d">; // absolute address jump (llvm doesn't support using \ so use /)
+    def JMP     : P2InstRA<0b1101100, 0b1, (outs), (ins reljmptarget:$d, P2Implicit:$cmp), "jmp $d">; // relative address jump
+    def JMPa    : P2InstRA<0b1101100, 0b0, (outs), (ins absjmptarget:$d, P2Implicit:$cmp), "jmp $d">; // absolute address jump.
 }
 
 let DecoderMethod = "DecodeTJInstruction", isBranch = 1, isBarrier = 1, isTerminator = 1 in {
@@ -453,9 +478,9 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 }
 
 let isCall = 1, Uses = [PTRA], DecoderMethod = "DecodeCallInstruction" in {
-    def CALL    : P2InstRA<0b1101101, 0b1, (outs), (ins calltarget:$a), "call $a">; // use this for relative function calls in cog mode.
-    def CALLa   : P2InstRA<0b1101101, 0b0, (outs), (ins calltarget:$a), "call $a">; // use this for absolute function calls in cog mode.
-    def CALLAa   : P2InstRA<0b1101110, 0b0, (outs), (ins calltarget:$a), "calla $a">; // mainly use this for direct function calls
+    def CALL    : P2InstRA<0b1101101, 0b1, (outs), (ins relcalltarget:$a), "call $a">; // use this for relative function calls in cog mode.
+    def CALLa   : P2InstRA<0b1101101, 0b0, (outs), (ins abscalltarget:$a), "call $a">; // use this for absolute function calls in cog mode.
+    def CALLAa   : P2InstRA<0b1101110, 0b0, (outs), (ins abscalltarget:$a), "calla $a">; // mainly use this for direct function calls
     def CALLr    : P2InstCZD<0b1101011, 0b000101101, (outs), (ins P2GPR:$d), "call $d">;
     def CALLAr   : P2InstCZD<0b1101011, 0b000101110, (outs), (ins P2GPR:$d), "calla $d">; // mainly use this for function calls with register input
 }
@@ -550,11 +575,7 @@ let Uses = [SW] in {
 }
 
 def NOP         : P2InstNOP;
-def AUGS        : P2InstN<0b11110, (outs), (ins i32imm:$d), "augs $d">;
-def AUGD        : P2InstN<0b11111, (outs), (ins i32imm:$d), "augd $d">;
+def AUGS        : P2InstN<0b11110, (outs), (ins i32imm:$n23), "augs $n23">;
+def AUGD        : P2InstN<0b11111, (outs), (ins i32imm:$n23), "augd $n23">;
 
 def FRMIDX      : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src), "frmidx $dst, $src">;
-
-/*--------------------------------*/
-/* Optimization patterns and such */
-/*--------------------------------*/

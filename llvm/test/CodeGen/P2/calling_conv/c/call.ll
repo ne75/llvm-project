@@ -1,4 +1,4 @@
-; RUN: llc < %s -march=p2 -mattr=avr6 | FileCheck %s
+; RUN: llc < %s -march=p2 | FileCheck %s
 
 ; basic function arguments
 declare void @void_void()
@@ -125,5 +125,11 @@ define void @call_void_vaarg() {
 ; CHECK:        add ptra, #12
 ; CHECK:        calla #void_vaarg
     call void (i32, ...) @void_vaarg(i32 1, i32 2, i32 3)
+    ret void
+}
+
+define void @call_multiple() {
+    call void @void_i64_i64_i32(i64 8589934593, i64 17179869187, i32 100)
+    call void @void_i64_i64_i64(i64 8589934593, i64 17179869187, i64 200)
     ret void
 }

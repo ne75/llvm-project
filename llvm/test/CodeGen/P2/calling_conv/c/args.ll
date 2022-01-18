@@ -1,4 +1,4 @@
-; RUN: llc < %s -march=p2 -mattr=avr6 | FileCheck %s
+; RUN: llc < %s -march=p2 | FileCheck %s
 
 ; basic function arguments
 define void @void_i8(i8 %a) {

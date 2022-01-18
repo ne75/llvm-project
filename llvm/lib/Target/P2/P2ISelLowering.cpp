@@ -340,7 +340,7 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     if (IsVarArg) {
         CCInfo.AnalyzeCallOperands(Outs, CC_P2_Vararg);
     } else {
-        CCInfo.AnalyzeCallOperands(Outs, CC_P2); // This doesn't seem to properly compute byval sizes
+        CCInfo.AnalyzeCallOperands(Outs, CC_P2);
     }
 
     // Get a count of how many bytes are to be pushed on the stack.
@@ -422,7 +422,7 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
             }
 
             // save how many bytes of the call will allocated
-            P2FI->setCallArgFrameSize(P2FI->getCallArgFrameSize() + arg_size);
+            // P2FI->setCallArgFrameSize(P2FI->getCallArgFrameSize() + arg_size);
 
             if (Flags.isByVal()) {
                 LLVM_DEBUG(errs() << "Argument is byval of size " << Flags.getByValSize() << "\n");

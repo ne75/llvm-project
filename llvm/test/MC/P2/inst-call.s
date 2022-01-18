@@ -19,7 +19,7 @@ test:
 	if_c_or_nz call #1
 	if_c_or_z call #1
 	call #1
-	_ret_ call /#1
+	_ret_ call #\1
 
 
 ' CHECK: _ret_ call #1 ' encoding: [0x01,0x00,0xb0,0x0d]
@@ -86,6 +86,6 @@ test:
 ' CHECK-INST: call #1
 
 
-' CHECK: _ret_ call /#1 ' encoding: [0x01,0x00,0xa0,0x0d]
-' CHECK-INST: _ret_ call /#1
+' CHECK: _ret_ call #\1 ' encoding: [0x01,0x00,0xa0,0x0d]
+' CHECK-INST: _ret_ call #\1
 

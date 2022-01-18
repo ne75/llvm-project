@@ -70,9 +70,9 @@ namespace {
 
         enum KindTy {
             k_Immediate,
-            k_Memory,
             k_Register,
-            k_Token
+            k_Token,
+            k_AbsAddr
         } Kind;
 
     public:
@@ -84,16 +84,11 @@ namespace {
         struct ImmOp {
             const MCExpr *Val;
         };
-        struct MemOp {
-            unsigned Base;
-            const MCExpr *Off;
-        };
 
         union {
             StringRef Tok;
             struct PhysRegOp Reg;
             struct ImmOp Imm;
-            struct MemOp Mem;
         };
 
         SMLoc StartLoc, EndLoc;
@@ -120,19 +115,11 @@ namespace {
             addExpr(Inst,Expr);
         }
 
-        void addMemOperands(MCInst &Inst, unsigned N) const {
-            assert(N == 2 && "Invalid number of operands!");
-
-            Inst.addOperand(MCOperand::createReg(getMemBase()));
-
-            const MCExpr *Expr = getMemOff();
-            addExpr(Inst,Expr);
-        }
-
         bool isReg() const override { return Kind == k_Register; }
         bool isImm() const override { return Kind == k_Immediate; }
+        bool isMem() const override { return false; /* we don't have operands of this kind */ }
         bool isToken() const override { return Kind == k_Token; }
-        bool isMem() const override { return Kind == k_Memory; }
+        bool isAbsAddr() const {return Kind == k_AbsAddr; }
 
         StringRef getToken() const {
             assert(Kind == k_Token && "Invalid access!");
@@ -145,18 +132,16 @@ namespace {
         }
 
         const MCExpr *getImm() const {
-            assert((Kind == k_Immediate) && "Invalid access!");
+            assert((Kind == k_Immediate || Kind == k_AbsAddr) && "Invalid access!");
             return Imm.Val;
         }
 
         unsigned getMemBase() const {
-            assert((Kind == k_Memory) && "Invalid access!");
-            return Mem.Base;
+            llvm_unreachable("mem type operands not supported in the P2 Asm Parser");
         }
 
         const MCExpr *getMemOff() const {
-            assert((Kind == k_Memory) && "Invalid access!");
-            return Mem.Off;
+            llvm_unreachable("mem type operands not supported in the P2 Asm Parser");
         }
 
         static std::unique_ptr<P2Operand> CreateToken(StringRef Str, SMLoc S) {
@@ -184,10 +169,9 @@ namespace {
             return Op;
         }
 
-        static std::unique_ptr<P2Operand> CreateMem(unsigned Base, const MCExpr *Off, SMLoc S, SMLoc E) {
-            auto Op = std::make_unique<P2Operand>(k_Memory);
-            Op->Mem.Base = Base;
-            Op->Mem.Off = Off;
+        static std::unique_ptr<P2Operand> CreateAbsAddr(const MCExpr *Val, SMLoc S, SMLoc E) {
+            auto Op = std::make_unique<P2Operand>(k_AbsAddr);
+            Op->Imm.Val = Val;
             Op->StartLoc = S;
             Op->EndLoc = E;
             return Op;
@@ -201,15 +185,9 @@ namespace {
         void print(raw_ostream &OS) const override {
             switch (Kind) {
             case k_Immediate:
+            case k_AbsAddr:
                 OS << "Imm<";
                 OS << *Imm.Val;
-                OS << ">";
-                break;
-            case k_Memory:
-                OS << "Mem<";
-                OS << Mem.Base;
-                OS << ", ";
-                OS << *Mem.Off;
                 OS << ">";
                 break;
             case k_Register:
@@ -224,7 +202,7 @@ namespace {
 
     class P2AsmParser : public MCTargetAsmParser {
         MCAsmParser &Parser;
-        P2AssemblerOptions Options;
+        // P2AssemblerOptions Options;
 
     #define GET_ASSEMBLER_HEADER
     #include "P2GenAsmMatcher.inc"
@@ -240,6 +218,8 @@ namespace {
         //bool parseEffectOperand(OperandVector &Operands, StringRef Mnemonic);
         int parseRegister(StringRef Mnemonic);
         bool tryParseRegisterOperand(OperandVector &Operands, StringRef Mnemonic);
+        OperandMatchResultTy tryParseCallTarget(OperandVector &Operands);
+        OperandMatchResultTy tryParseJmpTarget(OperandVector &Operands);
         int matchRegisterName(StringRef Symbol);
         int matchRegisterByNumber(unsigned RegNum, StringRef Mnemonic);
         unsigned getReg(int RC,int RegNo);
@@ -597,42 +577,33 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
             return false;
         }
 
-        case AsmToken::Slash: {
-            LLVM_DEBUG(errs() << "operand token is a /\n");
-            // is an absolute address (should be followed by an immediate). 
-            SMLoc S = Parser.getTok().getLoc();
-            Parser.Lex(); // eat the slash
-
-            if (Parser.getTok().getKind() != AsmToken::Hash) {
-                LLVM_DEBUG(errs() << "expected a # for an absolute address\n");
-                return false;
-            }
-
-            Parser.Lex(); // eat the #
-
-            const MCExpr *IdVal;
-            S = Parser.getTok().getLoc();
-            if (getParser().parseExpression(IdVal))
-                return true;
-
-            SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-            Operands.push_back(P2Operand::CreateImm(IdVal, S, E));
-            return false;
-        }
         case AsmToken::Hash: {
             LLVM_DEBUG(errs() << "operand token is a #\n");
             // is an immediate expression, so first create the token for the #
             SMLoc S = Parser.getTok().getLoc();
-            Parser.Lex(); // eat the pound sign
+            Parser.Lex(); // eat the #
 
-            const MCExpr *IdVal;
-            S = Parser.getTok().getLoc();
-            if (getParser().parseExpression(IdVal))
-                return true;
+            // is there a / for an absolute address? 
+            if (Parser.getTok().getKind() == AsmToken::BackSlash) {
+                Parser.Lex(); // eat the backslash
+                const MCExpr *IdVal;
+                S = Parser.getTok().getLoc();
+                if (getParser().parseExpression(IdVal))
+                    return true;
 
-            SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-            Operands.push_back(P2Operand::CreateImm(IdVal, S, E));
-            return false;
+                SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
+                Operands.push_back(P2Operand::CreateAbsAddr(IdVal, S, E));
+                return false;
+            } else {
+                const MCExpr *IdVal;
+                S = Parser.getTok().getLoc();
+                if (getParser().parseExpression(IdVal))
+                    return true;
+
+                SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
+                Operands.push_back(P2Operand::CreateImm(IdVal, S, E));
+                return false;
+            }
         }
     }
     return true;

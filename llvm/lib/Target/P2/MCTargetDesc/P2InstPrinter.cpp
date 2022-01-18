@@ -38,6 +38,15 @@ static bool isMIRandomAccess(const MCInst *MI) {
     return false;
 }
 
+static bool has20BitAbsAddr(const MCInst *MI) {
+    auto opc = MI->getOpcode();
+
+    if (opc == P2::JMPa || opc == P2::CALLa || opc == P2::CALLAa)
+        return true;
+
+    return false;
+}
+
 void P2InstPrinter::printRegName(raw_ostream &OS, unsigned RegNo) const {
     auto reg_val = MRI.getEncodingValue(RegNo);
     if (reg_val < 0x1d0) {
@@ -96,6 +105,7 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
     }
 
     if (Op.isImm()) {
+        // handle random access instructions which might use a PTRA expression
         if (isMIRandomAccess(MI)) {
             if (Op.getImm() == P2::PTRA_POSTINC) {
                 O << "ptra++";
@@ -114,6 +124,13 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
                 O << "ptra[" << idx << "]";
                 return;
             }
+
+            // this is a plain immediate, it'll print below
+        }
+
+        if (has20BitAbsAddr(MI)) {
+            O << "#\\" << Op.getImm();  
+            return;
         }
 
         O << "#" << Op.getImm();

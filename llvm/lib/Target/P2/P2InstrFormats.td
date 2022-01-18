@@ -612,12 +612,12 @@ class P2InstWRA<bits<5> op, bits<1> r, dag outs, dag inputs, string asmstr> :
 class P2InstN<bits<5> op, dag outs, dag inputs, string asmstr> :
     P2Inst<19, outs, !con(inputs, (ins P2Cond:$cc)), !strconcat("$cc ", asmstr)> {
 
-    bits<23> n;
+    bits<23> n23;
     bits<4> cc;
 
     let Inst{31-28} = cc;
     let Inst{27-23} = op;
-    let Inst{22-0} = n;
+    let Inst{22-0} = n23;
 
     let TSFlags{5} = 0;
     let TSFlags{6} = 0;
