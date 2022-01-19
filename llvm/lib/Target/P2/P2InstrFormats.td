@@ -169,7 +169,7 @@ class P2InstCZIDS<bits<7> op, bits<1> i, dag outs, dag inputs, string asmstr> :
 
 multiclass P2InstCZIDSm<bits<7> op, dag in_extra, string asmstr> {
     def rr : P2InstCZIDS<op, 0b0, (outs P2GPR:$d), !con(in_extra, (ins P2GPR:$s)), !strconcat(asmstr, " $d, $s")>;
-    def ri : P2InstCZIDS<op, 0b1, (outs P2GPR:$d), !con(in_extra, (ins i32imm:$s)), !strconcat(asmstr, " $d, #$s")>;
+    def ri : P2InstCZIDS<op, 0b1, (outs P2GPR:$d), !con(in_extra, (ins i32imm:$s)), !strconcat(asmstr, " $d, $s")>;
 }
 
 // 6 bit opcode, a 3-bit N value for nib-based instructions, I flag, and two operands (D/S). S can be imm
@@ -196,8 +196,8 @@ class P2Inst3NIDS<bits<6> op, bits<1> i, dag outs, dag inputs, string asmstr> :
 }
 
 multiclass P2Inst3NIDSm<bits<6> op, string asmstr> {
-    def rr : P2Inst3NIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, #$n")>;
-    def ri : P2Inst3NIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s, i32imm:$n), !strconcat(asmstr, " $d, #$s, #$n")>;
+    def rr : P2Inst3NIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, $n")>;
+    def ri : P2Inst3NIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, $n")>;
 }
 
 // 7 bit opcode, a 2-bit N value for byte-based instructios, I flag, and two operands (D/S). S can be imm
@@ -224,8 +224,8 @@ class P2Inst2NIDS<bits<7> op, bits<1> i, dag outs, dag inputs, string asmstr> :
 }
 
 multiclass P2Inst2NIDSm<bits<7> op, string asmstr> {
-    def rr : P2Inst2NIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, #$n")>;
-    def ri : P2Inst2NIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s, i32imm:$n), !strconcat(asmstr, " $d, #$s, #$n")>;
+    def rr : P2Inst2NIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, $n")>;
+    def ri : P2Inst2NIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, $n")>;
 }
 
 // 8 bit opcode, a 1-bit N value for short (2-byte) based, instructions, I flag, and two operands (D/S). S can be imm
@@ -252,8 +252,8 @@ class P2Inst1NIDS<bits<8> op, bits<1> i, dag outs, dag inputs, string asmstr> :
 }
 
 multiclass P2Inst1NIDSm<bits<8> op, string asmstr> {
-    def rr : P2Inst1NIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, #$n")>;
-    def ri : P2Inst1NIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s, i32imm:$n), !strconcat(asmstr, " $d, #$s, #$n")>;
+    def rr : P2Inst1NIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, $n")>;
+    def ri : P2Inst1NIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s, i32imm:$n), !strconcat(asmstr, " $d, $s, $n")>;
 }
 
 // 9 bit opcode, I flag, and two operands (D/S). S can be imm.
@@ -281,7 +281,7 @@ class P2InstIDS<bits<9> op, bits<1> i, dag outs, dag inputs, string asmstr> :
 
 multiclass P2InstIDSm<bits<9> op, string asmstr> {
     def rr : P2InstIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
-    def ri : P2InstIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s), !strconcat(asmstr, " $d, #$s")>;
+    def ri : P2InstIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s), !strconcat(asmstr, " $d, $s")>;
 }
 
 // 8 bit opcode, ZI flags, and two operands (D/S). S can be imm.
@@ -311,7 +311,7 @@ class P2InstZIDS<bits<8> op, bits<1> i, dag outs, dag inputs, string asmstr> :
 
 multiclass P2InstZIDSm<bits<8> op, dag in_extra, string asmstr> {
     def rr : P2InstZIDS<op, 0b0, (outs P2GPR:$d), !con(in_extra, (ins P2GPR:$s)), !strconcat(asmstr, " $d, $s")>;
-    def ri : P2InstZIDS<op, 0b1, (outs P2GPR:$d), !con(in_extra, (ins i32imm:$s)), !strconcat(asmstr, " $d, #$s")>;
+    def ri : P2InstZIDS<op, 0b1, (outs P2GPR:$d), !con(in_extra, (ins i32imm:$s)), !strconcat(asmstr, " $d, $s")>;
 }
 
 // 8 bit opcode, CI flags, and two operands (D/S). S can be imm.
@@ -342,7 +342,7 @@ class P2InstCIDS<bits<8> op, bits<1> i, dag outs, dag inputs, string asmstr> :
 
 multiclass P2InstCIDSm<bits<8> op, string asmstr> {
     def rr : P2InstCIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
-    def ri : P2InstCIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s), !strconcat(asmstr, " $d, #$s")>;
+    def ri : P2InstCIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s), !strconcat(asmstr, " $d, $s")>;
 }
 
 // 8 bit opcode, LI flags, and two operands (D/S). D and S can be imm.
@@ -368,9 +368,9 @@ class P2InstLIDS<bits<8> op, bits<2> li, dag outs, dag inputs, string asmstr> :
 
 multiclass P2InstLIDSm<bits<8> op, string asmstr> {
     def rr : P2InstLIDS<op, 0b00, (outs), (ins P2GPR:$d, P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
-    def ri : P2InstLIDS<op, 0b01, (outs), (ins P2GPR:$d, i32imm:$s), !strconcat(asmstr, " $d, #$s")>;
-    def ir : P2InstLIDS<op, 0b10, (outs), (ins i32imm:$d, P2GPR:$s), !strconcat(asmstr, " #$d, $s")>;
-    def ii : P2InstLIDS<op, 0b11, (outs), (ins i32imm:$d, i32imm:$s), !strconcat(asmstr, " #$d, #$s")>;
+    def ri : P2InstLIDS<op, 0b01, (outs), (ins P2GPR:$d, i32imm:$s), !strconcat(asmstr, " $d, $s")>;
+    def ir : P2InstLIDS<op, 0b10, (outs), (ins i32imm:$d, P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
+    def ii : P2InstLIDS<op, 0b11, (outs), (ins i32imm:$d, i32imm:$s), !strconcat(asmstr, " $d, $s")>;
 }
 
 // 9 bit opcode, I flags, and one operand (S). S can be imm. D field serves as a sub-opcode.
@@ -394,7 +394,7 @@ class P2InstIS<bits<9> op, bits<9> d, bits<1> i, dag outs, dag inputs, string as
 
 multiclass P2InstISm<bits<9> op, bits<9> d, string asmstr> {
     def r : P2InstIS<op, d, 0b0, (outs), (ins P2GPR:$s), !strconcat(asmstr, " $s")>;
-    def i : P2InstIS<op, d, 0b1, (outs), (ins i32imm:$s), !strconcat(asmstr, " #$s")>;
+    def i : P2InstIS<op, d, 0b1, (outs), (ins i32imm:$s), !strconcat(asmstr, " $s")>;
 }
 
 // 7 bit opcode, CLI flags, and two operands (D/S). D and S can be imm.
@@ -422,9 +422,9 @@ class P2InstCLIDS<bits<7> op, bits<2> li, dag outs, dag inputs, string asmstr> :
 
 multiclass P2InstCLIDSm<bits<7> op, string asmstr> {
     def rr : P2InstCLIDS<op, 0b00, (outs P2GPR:$d), (ins P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
-    def ri : P2InstCLIDS<op, 0b01, (outs P2GPR:$d), (ins i32imm:$s), !strconcat(asmstr, " $d, #$s")>;
-    def ir : P2InstCLIDS<op, 0b10, (outs i32imm:$d), (ins P2GPR:$s), !strconcat(asmstr, " #$d, $s")>;
-    def ii : P2InstCLIDS<op, 0b11, (outs i32imm:$d), (ins i32imm:$s), !strconcat(asmstr, " #$d, #$s")>;
+    def ri : P2InstCLIDS<op, 0b01, (outs P2GPR:$d), (ins i32imm:$s), !strconcat(asmstr, " $d, $s")>;
+    def ir : P2InstCLIDS<op, 0b10, (outs i32imm:$d), (ins P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
+    def ii : P2InstCLIDS<op, 0b11, (outs i32imm:$d), (ins i32imm:$s), !strconcat(asmstr, " $d, $s")>;
 }
 
 // 7 bit opcode, L flag, and one operand (D). D can be imm. S field serves as a sub-opcode.
@@ -449,7 +449,7 @@ class P2InstLD<bits<7> op, bits<9> s, bits<1> l, dag outs, dag inputs, string as
 
 multiclass P2InstLDm<bits<7> op, bits<9> s, string asmstr> {
     def r : P2InstLD<op, s, 0b0, (outs), (ins P2GPR:$d), !strconcat(asmstr, " $d")>;
-    def i : P2InstLD<op, s, 0b1, (outs), (ins i32imm:$d), !strconcat(asmstr, " #$d")>;
+    def i : P2InstLD<op, s, 0b1, (outs), (ins i32imm:$d), !strconcat(asmstr, " $d")>;
 }
 
 // 7 bit opcode, CL flags, and one operand (D). D can be imm. S field serves as a sub-opcode.
@@ -476,7 +476,7 @@ class P2InstCLD<bits<7> op, bits<9> s, bits<1> l, dag outs, dag inputs, string a
 
 multiclass P2InstCLDm<bits<7> op, bits<9> s, string asmstr> {
     def r : P2InstCLD<op, s, 0b0, (outs), (ins P2GPR:$d), !strconcat(asmstr, " $d")>;
-    def i : P2InstCLD<op, s, 0b1, (outs), (ins i32imm:$d), !strconcat(asmstr, " #$d")>;
+    def i : P2InstCLD<op, s, 0b1, (outs), (ins i32imm:$d), !strconcat(asmstr, " $d")>;
 }
 
 // 7 bit opcode, CZ flags, and one operand (D). S field serves as a sub-opcode.
@@ -546,7 +546,7 @@ class P2InstCZLD<bits<7> op, bits<9> s, bits<1> l, dag outs, dag inputs, string 
 
 multiclass P2InstCZLDm<bits<7> op, bits<9> s, string asmstr> {
     def r : P2InstCZLD<op, s, 0b0, (outs), (ins P2GPR:$d), !strconcat(asmstr, " $d")>;
-    def i : P2InstCZLD<op, s, 0b1, (outs), (ins i32imm:$d), !strconcat(asmstr, " #$d")>;
+    def i : P2InstCZLD<op, s, 0b1, (outs), (ins i32imm:$d), !strconcat(asmstr, " $d")>;
 }
 
 // 10 bit opcode, (7 bits + 000) and one D operand. S field serves as a sub-opcode.
@@ -612,12 +612,12 @@ class P2InstWRA<bits<5> op, bits<1> r, dag outs, dag inputs, string asmstr> :
 class P2InstN<bits<5> op, dag outs, dag inputs, string asmstr> :
     P2Inst<19, outs, !con(inputs, (ins P2Cond:$cc)), !strconcat("$cc ", asmstr)> {
 
-    bits<23> n;
+    bits<23> n23;
     bits<4> cc;
 
     let Inst{31-28} = cc;
     let Inst{27-23} = op;
-    let Inst{22-0} = n;
+    let Inst{22-0} = n23;
 
     let TSFlags{5} = 0;
     let TSFlags{6} = 0;

@@ -31,7 +31,7 @@ class P2FunctionInfo : public MachineFunctionInfo {
 
     /// SRetReturnReg - Some subtargets require that sret lowering includes
     /// returning the value of the returned struct in a register. This field
-    /// holds the virtual register into which the sret argument is passed.
+    /// holds the virtual register into which the sret argumçent is passed.
     unsigned SRetReturnReg;
 
     /// index where call saves PC and status word
@@ -52,14 +52,8 @@ class P2FunctionInfo : public MachineFunctionInfo {
     /// Size of the callee-saved register portion of the stack frame in bytes.
     unsigned CalleeSavedFrameSize;
 
-    /// all of the space allocated for arguments passed to called functions. 
-    unsigned CallArgFrameSize;
-
     /// this function is intended to be loaded directly into a cog
     bool cogex;
-
-    bool EmitNOAT;
-    unsigned MaxCallFrameSize;
 
 public:
     P2FunctionInfo(MachineFunction &MF)
@@ -68,10 +62,7 @@ public:
         VarArgsFrameOffset(0),
         VarArgsFrameIndex(0),
         IncomingArgSize(0),
-        CalleeSavedFrameSize(0),
-        EmitNOAT(false),
-        CallArgFrameSize(0),
-        MaxCallFrameSize(0)
+        CalleeSavedFrameSize(0)
         {
             cogex = MF.getFunction().hasFnAttribute(Attribute::Cogmain) || MF.getFunction().hasFnAttribute(Attribute::Cogtext);
         }
@@ -96,17 +87,8 @@ public:
         HasByvalArg = HasByval;
     }
 
-    unsigned getCallArgFrameSize() const { return CallArgFrameSize; }
-    void setCallArgFrameSize(unsigned S) { CallArgFrameSize = S; }
-
-    unsigned getMaxCallFrameSize() const { return MaxCallFrameSize; }
-    void setMaxCallFrameSize(unsigned S) { MaxCallFrameSize = S; }
-
     unsigned getCalleeSavedFrameSize() const { return CalleeSavedFrameSize; }
     void setCalleeSavedFrameSize(unsigned Bytes) { CalleeSavedFrameSize = Bytes; }
-
-    bool getEmitNOAT() const { return EmitNOAT; }
-    void setEmitNOAT() { EmitNOAT = true; }
 
     bool isCogex() {
         return cogex;

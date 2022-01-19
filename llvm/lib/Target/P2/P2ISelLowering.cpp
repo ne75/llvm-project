@@ -340,7 +340,7 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     if (IsVarArg) {
         CCInfo.AnalyzeCallOperands(Outs, CC_P2_Vararg);
     } else {
-        CCInfo.AnalyzeCallOperands(Outs, CC_P2); // This doesn't seem to properly compute byval sizes
+        CCInfo.AnalyzeCallOperands(Outs, CC_P2);
     }
 
     // Get a count of how many bytes are to be pushed on the stack.
