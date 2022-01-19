@@ -54,13 +54,13 @@ void P2FrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) 
             .addImm(P2::NOEFF);
     }
 
-    // the stack gets preallocated for incoming arguments + 4 bytes for the PC/SW + regs already saved to the stack,
-    // and arguments pushed to the stack for function calls so don't allocate that in the prologue
-    uint64_t StackSize = MFI.getStackSize() - 4 - P2FI->getIncomingArgSize() - P2FI->getCalleeSavedFrameSize() - P2FI->getCallArgFrameSize();
+    // the stack gets preallocated for incoming arguments + 4 bytes for the PC/SW + regs already saved to the stack
+    // there might be a better way to encode this data in other variables sutch that MFI.getStackSize() already 
+    // returns the correct value, but leave the adjustment here for now
+    uint64_t StackSize = MFI.getStackSize() - 4 - P2FI->getIncomingArgSize() - P2FI->getCalleeSavedFrameSize();
     LLVM_DEBUG(errs() << "Allocating " << StackSize << " bytes for stack (original value: " << MFI.getStackSize() << ")\n");
     LLVM_DEBUG(errs() << "* Incoming arg size: " << P2FI->getIncomingArgSize() << "\n");
     LLVM_DEBUG(errs() << "* Callee saved frame size: " << P2FI->getCalleeSavedFrameSize() << "\n");
-    LLVM_DEBUG(errs() << "* Call arg frame size: " <<  P2FI->getCallArgFrameSize() << "\n");
 
     // No need to allocate space on the stack.
     if (StackSize == 0) {
@@ -83,7 +83,7 @@ void P2FrameLowering::emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) 
     P2FunctionInfo *P2FI = MF.getInfo<P2FunctionInfo>();
 
     const P2InstrInfo *TII = MF.getSubtarget<P2Subtarget>().getInstrInfo();
-    uint64_t StackSize = MFI.getStackSize() - 4 - P2FI->getIncomingArgSize() - P2FI->getCalleeSavedFrameSize() - P2FI->getCallArgFrameSize();
+    uint64_t StackSize = MFI.getStackSize() - 4 - P2FI->getIncomingArgSize() - P2FI->getCalleeSavedFrameSize();
 
     LLVM_DEBUG(errs() << "Frame Info:\n");
     LLVM_DEBUG(MFI.dump(MF));
@@ -303,8 +303,10 @@ MachineBasicBlock::iterator P2FrameLowering::eliminateCallFramePseudoInstr(Machi
     LLVM_DEBUG(errs() << "=== eliminate call frame pseudo\n");
 
     int64_t adjust = I->getOperand(0).getImm();
+    auto opc = I->getOpcode();
+    MachineBasicBlock::iterator IStart;
 
-    if (I->getOpcode() == P2::ADJCALLSTACKDOWN) {
+    if (opc == P2::ADJCALLSTACKDOWN) {
         LLVM_DEBUG(errs() << "Adjust down\n");
         LLVM_DEBUG(errs() << "block: \n");
         LLVM_DEBUG(MBB.dump());
@@ -312,6 +314,8 @@ MachineBasicBlock::iterator P2FrameLowering::eliminateCallFramePseudoInstr(Machi
         // move backwards until we get to the call instruction
         adjust = -adjust;
         I = MBB.erase(I); // erase the psuedo
+        IStart = I;
+
         if (I == MBB.end()) I--;
 
         auto op = I->getOpcode();
@@ -321,12 +325,13 @@ MachineBasicBlock::iterator P2FrameLowering::eliminateCallFramePseudoInstr(Machi
         }
 
         I++; // go forward one to insert after the call
-    } else if (I->getOpcode() == P2::ADJCALLSTACKUP) {
+    } else if (opc == P2::ADJCALLSTACKUP) {
         LLVM_DEBUG(errs() << "Adjust up\n");
         LLVM_DEBUG(errs() << "block: \n");
         LLVM_DEBUG(MBB.dump());
 
         I = MBB.erase(I); // first erase our psuedo instruction.
+        IStart = I;
 
         auto op = I->getOpcode();
         while (op != P2::CALL && op != P2::CALLa && op != P2::CALLAa && op != P2::CALLAr && op != P2::CALLr) {
@@ -338,6 +343,11 @@ MachineBasicBlock::iterator P2FrameLowering::eliminateCallFramePseudoInstr(Machi
     // adjust the stack pointer, if necessary
     if (adjust)
         tm.getInstrInfo()->adjustStackPtr(P2::PTRA, adjust, MBB, I);
+
+    // move back to where we started, in case we skipped over a frame index instruction that needs elimination
+    while (I != IStart) 
+        if (opc == P2::ADJCALLSTACKUP) I--;
+        else if (opc == P2::ADJCALLSTACKDOWN) I++;
 
     return I;
 }

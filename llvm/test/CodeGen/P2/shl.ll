@@ -16,7 +16,7 @@ define i32 @shl32_ri(i32 %a) {
 
 define i64 @shl64_rr(i64 %a, i64 %b) {
 ; CHECK-LABEL:  shl64_rr:
-; CHECK:        calla #__ashldi3
+; CHECK:        calla __ashldi3
     %r = shl i64 %a, %b
     ret i64 %r
 }

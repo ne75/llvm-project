@@ -10,7 +10,7 @@ define i32 @mul32_rr(i32 %a, i32 %b) {
 
 define i64 @mul64_rr(i64 %a, i64 %b) {
 ; CHECK-LABEL:  mul64_rr:
-; CHECK:        calla #__muldi3
+; CHECK:        calla __muldi3
     %r = mul i64 %a, %b
     ret i64 %r
 }

@@ -16,7 +16,7 @@ define i32 @lshr32_ri(i32 %a) {
 
 define i64 @lshr64_rr(i64 %a, i64 %b) {
 ; CHECK-LABEL:  lshr64_rr:
-; CHECK:        calla #__lshrdi3
+; CHECK:        calla __lshrdi3
     %r = lshr i64 %a, %b
     ret i64 %r
 }

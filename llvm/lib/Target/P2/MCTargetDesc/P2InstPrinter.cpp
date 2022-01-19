@@ -117,7 +117,9 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
                 return;
             }   
 
-            if ((Op.getImm() & 0x1c0) == P2::PTRA_INDEX6) {
+            // this is a D operand, so don't try to convert to a special immediate
+            bool OpIsD = P2::getDNum(MII.get(MI->getOpcode()).TSFlags) == OpNum;
+            if (!OpIsD && (Op.getImm() & 0x1c0) == P2::PTRA_INDEX6) {
                 int idx = Op.getImm() & 0x3f;
                 if (idx > 31) idx -= 64;
 

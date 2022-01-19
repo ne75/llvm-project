@@ -52,9 +52,6 @@ class P2FunctionInfo : public MachineFunctionInfo {
     /// Size of the callee-saved register portion of the stack frame in bytes.
     unsigned CalleeSavedFrameSize;
 
-    /// all of the space allocated for arguments passed to called functions. 
-    unsigned CallArgFrameSize;
-
     /// this function is intended to be loaded directly into a cog
     bool cogex;
 
@@ -65,8 +62,7 @@ public:
         VarArgsFrameOffset(0),
         VarArgsFrameIndex(0),
         IncomingArgSize(0),
-        CalleeSavedFrameSize(0),
-        CallArgFrameSize(0)
+        CalleeSavedFrameSize(0)
         {
             cogex = MF.getFunction().hasFnAttribute(Attribute::Cogmain) || MF.getFunction().hasFnAttribute(Attribute::Cogtext);
         }
@@ -90,9 +86,6 @@ public:
         IncomingArgSize = Size;
         HasByvalArg = HasByval;
     }
-
-    unsigned getCallArgFrameSize() const { return CallArgFrameSize; }
-    void setCallArgFrameSize(unsigned S) { CallArgFrameSize = S; }
 
     unsigned getCalleeSavedFrameSize() const { return CalleeSavedFrameSize; }
     void setCalleeSavedFrameSize(unsigned Bytes) { CalleeSavedFrameSize = Bytes; }

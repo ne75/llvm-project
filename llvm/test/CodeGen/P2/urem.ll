@@ -10,7 +10,7 @@ define i32 @urem32_rr(i32 %a, i32 %b) {
 
 define i64 @urem64_rr(i64 %a, i64 %b) {
 ; CHECK-LABEL:  urem64_rr:
-; CHECK:        calla #__umoddi3
+; CHECK:        calla __umoddi3
     %r = urem i64 %a, %b
     ret i64 %r
 }

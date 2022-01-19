@@ -31,6 +31,7 @@ namespace llvm {
         }
 
         bool hasFP(const MachineFunction &MF) const override {return false;};
+        bool hasReservedCallFrame(const MachineFunction &MF) const override {return false;};
 
         void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
         void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;

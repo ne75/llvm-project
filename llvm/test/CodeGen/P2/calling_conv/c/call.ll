@@ -20,7 +20,7 @@ declare void @void_vaarg(i32 %a, ...)
 
 define void @call_void_void() {
 ; CHECK-LABEL:  call_void_void: 
-; CHECK:        calla #void_void
+; CHECK:        calla void_void
     call void @void_void()
     ret void
 }
@@ -28,7 +28,7 @@ define void @call_void_void() {
 define void @call_void_i8() {
 ; CHECK-LABEL:  call_void_i8: 
 ; CHECK:        mov r0, #1
-; CHECK:        calla #void_i8
+; CHECK:        calla void_i8
     call void @void_i8(i8 1)
     ret void
 }
@@ -37,7 +37,7 @@ define void @call_void_i16() {
 ; CHECK-LABEL:  call_void_i16: 
 ; CHECK:        augs #1
 ; CHECK:        mov r0, #488
-; CHECK:        calla #void_i16
+; CHECK:        calla void_i16
     call void @void_i16(i16 1000)
     ret void
 }
@@ -46,7 +46,7 @@ define void @call_void_i32() {
 ; CHECK-LABEL:  call_void_i32: 
 ; CHECK:        augs #1
 ; CHECK:        mov r0, #488
-; CHECK:        calla #void_i32
+; CHECK:        calla void_i32
     call void @void_i32(i32 1000)
     ret void
 }
@@ -57,7 +57,7 @@ define void @call_void_i64() {
 ; CHECK-NEXT:   mov r0, #511
 ; CHECK:        augs #127
 ; CHECK-NEXT:   mov r1, #511
-; CHECK:        calla #void_i64
+; CHECK:        calla void_i64
     call void @void_i64(i64 281474976710655)
     ret void
 }
@@ -68,7 +68,7 @@ define void @call_void_i32_i32_i32_i32() {
 ; CHECK:        mov r1, #2
 ; CHECK:        mov r2, #3
 ; CHECK:        mov r3, #4
-; CHECK:        calla #void_i32_i32_i32_i32
+; CHECK:        calla void_i32_i32_i32_i32
     call void @void_i32_i32_i32_i32(i32 1, i32 2, i32 3, i32 4)
     ret void
 }
@@ -79,7 +79,7 @@ define void @call_void_i64_i64() {
 ; CHECK:        mov r1, #2
 ; CHECK:        mov r2, #3
 ; CHECK:        mov r3, #4
-; CHECK:        calla #void_i64_i64
+; CHECK:        calla void_i64_i64
     call void @void_i64_i64(i64 8589934593, i64 17179869187)
     ret void
 }
@@ -92,7 +92,7 @@ define void @call_void_i64_i64_i32() {
 ; CHECK:        mov r2, #3
 ; CHECK:        mov r3, #4
 ; CHECK:        add ptra, #4
-; CHECK:        calla #void_i64_i64_i32
+; CHECK:        calla void_i64_i64_i32
     call void @void_i64_i64_i32(i64 8589934593, i64 17179869187, i32 100)
     ret void
 }
@@ -108,7 +108,7 @@ define void @call_void_i64_i64_i64() {
 ; CHECK:        mov r2, #3
 ; CHECK:        mov r3, #4
 ; CHECK:        add ptra, #8
-; CHECK:        calla #void_i64_i64_i64
+; CHECK:        calla void_i64_i64_i64
     call void @void_i64_i64_i64(i64 8589934593, i64 17179869187, i64 200)
     ret void
 }
@@ -123,13 +123,7 @@ define void @call_void_vaarg() {
 ; CHECK:        add r0, #8
 ; CHECK:        wrlong #1, r0
 ; CHECK:        add ptra, #12
-; CHECK:        calla #void_vaarg
+; CHECK:        calla void_vaarg
     call void (i32, ...) @void_vaarg(i32 1, i32 2, i32 3)
-    ret void
-}
-
-define void @call_multiple() {
-    call void @void_i64_i64_i32(i64 8589934593, i64 17179869187, i32 100)
-    call void @void_i64_i64_i64(i64 8589934593, i64 17179869187, i64 200)
     ret void
 }

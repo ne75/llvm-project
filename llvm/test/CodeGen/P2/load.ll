@@ -25,7 +25,7 @@ define i16 @load16() {
 define i32 @load32() {
 ; CHECK-LABEL:  load32:
 ; CHECK:        add ptra, #4
-; CHECK-NEXT:   rdlong r31, #319
+; CHECK-NEXT:   rdlong r31, ptra[-1]
     %ptr = alloca i32
     %val = load i32, i32* %ptr
     ret i32 %val

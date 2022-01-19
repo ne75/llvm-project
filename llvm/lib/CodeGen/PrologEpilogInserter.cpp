@@ -893,8 +893,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
     }
   }
 
-  LLVM_DEBUG(errs() << "stack size: " << Offset << "\n");
-
   // FixedCSEnd is the stack offset to the end of the fixed and callee-save
   // stack area.
   int64_t FixedCSEnd = Offset;
@@ -939,8 +937,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
 
     MaxAlign = std::max(Alignment, MaxAlign);
   }
-
-  LLVM_DEBUG(errs() << "stack size: " << Offset << "\n");
 
   // Retrieve the Exception Handler registration node.
   int EHRegNodeFrameIndex = std::numeric_limits<int>::max();
@@ -1018,8 +1014,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
 
   SmallVector<int, 8> ObjectsToAllocate;
 
-  LLVM_DEBUG(errs() << "stack size: " << Offset << "\n");
-
   // Then prepare to assign frame offsets to stack objects that are not used to
   // spill callee saved registers.
   for (unsigned i = 0, e = MFI.getObjectIndexEnd(); i != e; ++i) {
@@ -1043,8 +1037,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
     ObjectsToAllocate.push_back(i);
   }
 
-  LLVM_DEBUG(errs() << "stack size: " << Offset << "\n");
-
   // Allocate the EH registration node first if one is present.
   if (EHRegNodeFrameIndex != std::numeric_limits<int>::max())
     AdjustStackOffset(MFI, EHRegNodeFrameIndex, StackGrowsDown, Offset,
@@ -1054,8 +1046,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   if (MF.getTarget().getOptLevel() != CodeGenOpt::None &&
       MF.getTarget().Options.StackSymbolOrdering)
     TFI.orderFrameObjects(MF, ObjectsToAllocate);
-
-  LLVM_DEBUG(errs() << "stack size: " << Offset << "\n");
 
   // Keep track of which bytes in the fixed and callee-save range are used so we
   // can use the holes when allocating later stack objects.  Only do this if
@@ -1082,8 +1072,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
     for (int SFI : SFIs)
       AdjustStackOffset(MFI, SFI, StackGrowsDown, Offset, MaxAlign, Skew);
   }
-
-  LLVM_DEBUG(errs() << "stack size: " << Offset << "\n");
 
   if (!TFI.targetHandlesStackFrameRounding()) {
     // If we have reserved argument space for call sites in the function
@@ -1134,8 +1122,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   int64_t StackSize = Offset - LocalAreaOffset;
   MFI.setStackSize(StackSize);
   NumBytesStackSpace += StackSize;
-
-  LLVM_DEBUG(errs() << "stack size: " << Offset << "\n");
 }
 
 /// insertPrologEpilogCode - Scan the function for modified callee saved

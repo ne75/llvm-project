@@ -25,7 +25,7 @@ define void @store16_r(i16 %val) {
 define void @store32_r(i32 %val) {
 ; CHECK-LABEL:  store32_r:
 ; CHECK:        add ptra, #4
-; CHECK-NEXT:   wrlong r0, #319
+; CHECK-NEXT:   wrlong r0, ptra[-1]
     %ptr = alloca i32
     store i32 %val, i32* %ptr
     ret void
@@ -56,7 +56,7 @@ define void @store16_i() {
 define void @store32_i() {
 ; CHECK-LABEL:  store32_i:
 ; CHECK:        add ptra, #4
-; CHECK-NEXT:   wrlong #1, #319
+; CHECK-NEXT:   wrlong #1, ptra[-1]
     %ptr = alloca i32
     store i32 1, i32* %ptr
     ret void
@@ -66,7 +66,7 @@ define void @store32_large_i() {
 ; CHECK-LABEL:  store32_large_i:
 ; CHECK:        add ptra, #4
 ; CHECK-NEXT:   augd #1
-; CHECK-NEXT:   wrlong #488, #319
+; CHECK-NEXT:   wrlong #488, ptra[-1]
     %ptr = alloca i32
     store i32 1000, i32* %ptr
     ret void
