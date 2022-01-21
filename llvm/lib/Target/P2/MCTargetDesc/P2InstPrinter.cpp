@@ -38,6 +38,14 @@ static bool isMIRandomAccess(const MCInst *MI) {
     return false;
 }
 
+static bool isMICall(const MCInst *MI) {
+    auto opc = MI->getOpcode();
+
+    if (opc == P2::CALLAa || opc == P2::CALLa) return true;
+
+    return false;
+}
+
 static bool has20BitAbsAddr(const MCInst *MI) {
     auto opc = MI->getOpcode();
 
@@ -140,6 +148,10 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
     }
 
     assert(Op.isExpr() && "unknown operand kind in printOperand");
+
+    if (isMICall(MI)) {
+        O << "#\\";
+    }
     printExpr(Op.getExpr(), &MAI, O);
 }
 

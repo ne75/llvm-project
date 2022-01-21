@@ -10,7 +10,7 @@ define i32 @udiv32_rr(i32 %a, i32 %b) {
 
 define i64 @udiv64_rr(i64 %a, i64 %b) {
 ; CHECK-LABEL:  udiv64_rr:
-; CHECK:        calla __udivdi3
+; CHECK:        calla #\__udivdi3
     %r = udiv i64 %a, %b
     ret i64 %r
 }
