@@ -143,6 +143,7 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
             return;
         }
 
+        if (!isUInt<9>(Op.getImm())) O << "#";
         O << "#" << Op.getImm();
         return;
     }
