@@ -177,6 +177,41 @@ namespace llvm {
 
             return ALWAYS;
         }
+
+        static inline int getCondition(const MCInst &mi) {
+            switch (getInstructionForm(mi.getFlags())) {
+            case P2InstCZIDS:
+            case P2InstZIDS:
+            case P2InstCIDS:
+            case P2InstCLIDS:
+            case P2InstCLD:
+            case P2InstCZD:
+            case P2InstCZ:
+            case P2InstCZLD:
+                return mi.getOperand(mi.getNumOperands()-2).getImm();
+                break;
+
+            
+            case P2Inst3NIDS:
+            case P2Inst2NIDS:
+            case P2Inst1NIDS:
+            case P2InstIDS:
+            case P2InstLIDS:
+            case P2InstIS:
+            case P2InstLD:
+            case P2InstD:
+            case P2InstRA:
+            case P2InstWRA:
+            case P2InstN:
+                return mi.getOperand(mi.getNumOperands()-1).getImm();
+                break;
+            
+            default:
+                break;
+            }
+
+            return ALWAYS;
+        }
     }
 
 }
