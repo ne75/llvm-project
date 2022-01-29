@@ -50,7 +50,6 @@ class P2Disassembler : public MCDisassembler {
 class P2Symbolizer : public MCSymbolizer {
 private:
     void *DisInfo;
-    std::vector<uint64_t> ReferencedAddresses;
 
 public:
     P2Symbolizer(MCContext &Ctx, std::unique_ptr<MCRelocationInfo> &&RelInfo,
@@ -65,10 +64,6 @@ public:
     void tryAddingPcLoadReferenceComment(raw_ostream &cStream,
                                         int64_t Value,
                                         uint64_t Address) override;
-
-    ArrayRef<uint64_t> getReferencedAddresses() const override {
-        return ReferencedAddresses;
-    }
 };
 
 //===----------------------------------------------------------------------===//
@@ -80,7 +75,7 @@ static MCDisassembler *createP2Disassembler(const Target &T, const MCSubtargetIn
 }
 
 static MCSymbolizer *createP2Symbolizer(const Triple &/*TT*/,
-                              LLVMOpInfoCallback /*GetOpInfo*/,
+                              LLVMOpInfoCallback GetOpInfo,
                               LLVMSymbolLookupCallback /*SymbolLookUp*/,
                               void *DisInfo,
                               MCContext *Ctx,
@@ -159,16 +154,24 @@ static DecodeStatus decodeJump9Target(MCInst &Inst, unsigned Insn, uint64_t Addr
 }
 
 static DecodeStatus DecodeCallInstruction(MCInst &Inst, unsigned Insn, uint64_t Address, const void *Decoder) {
-    int32_t a_field = fieldFromInstruction(Insn, 0, 20);
-    int32_t d_field = fieldFromInstruction(Insn, 9, 9);
+    uint32_t a_field = fieldFromInstruction(Insn, 0, 20);
+    uint32_t d_field = fieldFromInstruction(Insn, 9, 9);
 
     unsigned opc = Inst.getOpcode();
-    if (opc == P2::CALL || opc == P2::CALLa || opc == P2::CALLAa) {
-        // FIXME: make this work.
-        auto *Dis = static_cast<const P2Disassembler*>(Decoder);
-        if (!Dis->tryAddingSymbolicOperand(Inst, a_field, Address, false, 0, 4)) {
+    if (opc == P2::CALLa || opc == P2::CALLAa) {
+        uint32_t call_addr = a_field;
+
+        if (a_field >= 0x200 && a_field < 0x400) {
+            // this is a call to a LUT address, adjust it before trying to create a symbol.
+            call_addr = 4*(a_field - 0x200) + 0x200;
+        }
+
+        auto *Dis = static_cast<const MCDisassembler*>(Decoder);
+        if (!Dis->tryAddingSymbolicOperand(Inst, call_addr, Address, true, 0, 1)) {
             Inst.addOperand(MCOperand::createImm(a_field));
         }
+    } else if (opc == P2::CALL) {
+        Inst.addOperand(MCOperand::createImm(a_field));
     } else {
         Inst.addOperand(MCOperand::createReg(getRegForField(d_field)));
     }
@@ -347,8 +350,6 @@ DecodeStatus P2Disassembler::getInstruction(MCInst &Instr, uint64_t &Size, Array
 
 	Result = readInstruction(Bytes, Address, Size, Insn);
 	if (Result == MCDisassembler::Fail) return MCDisassembler::Fail;
-    // set the TSFlags for the instruction printer
-    // FIXME: add writing the C/Z flags to TSFlags for printing
 
     LLVM_DEBUG(errs() << "get instruction: " << Insn << "\n");
 
@@ -369,12 +370,13 @@ typedef DecodeStatus (*DecodeFunc)(MCInst &MI, unsigned insn, uint64_t Address, 
 //===----------------------------------------------------------------------===//
 
 // Try to find symbol name for specified label
+// it only works for complete elfs--anything that's a relocation doesn't work correctly
 bool P2Symbolizer::tryAddingSymbolicOperand(MCInst &Inst,
                                 raw_ostream &/*cStream*/, int64_t Value,
-                                uint64_t /*Address*/, bool IsBranch,
+                                uint64_t Address, bool IsBranch,
                                 uint64_t /*Offset*/, uint64_t /*InstSize*/) {
 
-    if (IsBranch) { // can't do branches
+    if (!IsBranch) { // only symbolize branches/calls
         return false;
     }
 
@@ -393,8 +395,7 @@ bool P2Symbolizer::tryAddingSymbolicOperand(MCInst &Inst,
         Inst.addOperand(MCOperand::createExpr(Add));
         return true;
     }
-    // Add to list of referenced addresses, so caller can synthesize a label.
-    ReferencedAddresses.push_back(static_cast<uint64_t>(Value));
+    
     return false;
 }
 
