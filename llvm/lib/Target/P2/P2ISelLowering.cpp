@@ -117,6 +117,7 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setTruncStoreAction(MVT::i64, MVT::i16, Expand);
     setTruncStoreAction(MVT::i64, MVT::i32, Expand);
 
+
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i8, Expand);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i8, Expand);
     setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i8, Expand);
@@ -140,7 +141,10 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::CTTZ, MVT::i64, Expand);
     setOperationAction(ISD::CTLZ, MVT::i64, Expand);
     setOperationAction(ISD::CTPOP, MVT::i64, Expand);
+    setOperationAction(ISD::MULHS, MVT::i64, Expand);
     setOperationAction(ISD::MULHU, MVT::i64, Expand);
+    setOperationAction(ISD::ROTL, MVT::i64, Expand);
+    setOperationAction(ISD::ROTR, MVT::i64, Expand);
 
     setOperationAction(ISD::SHL_PARTS, MVT::i64, Expand);
     setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);

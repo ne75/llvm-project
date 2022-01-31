@@ -36,7 +36,7 @@ def RetCC_P2 : CallingConv <[
     // i32 are returned in R31
     CCIfType<[i32], CCAssignToReg<[R31, R30, R29, R28]>>,
 
-    CCIfType<[i64], CCAssignToReg<[R30_R31, R28_R29]>>,
+    CCIfType<[i64], CCAssignToReg<[R30_R31, R28_R29, R26_R27, R24_R25]>>,
 
     CCIfByVal<CCPassByVal<1, 1>>
 ]>;
