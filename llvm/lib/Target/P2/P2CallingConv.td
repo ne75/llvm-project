@@ -34,9 +34,9 @@ def CC_P2_Vararg : CallingConv <[
 def RetCC_P2 : CallingConv <[
     CCIfType<[i1, i8, i16], CCPromoteToType<i32>>,
     // i32 are returned in R31
-    CCIfType<[i32], CCAssignToReg<[R31]>>,
+    CCIfType<[i32], CCAssignToReg<[R31, R30, R29, R28]>>,
 
-    CCIfType<[i64], CCAssignToReg<[R30_R31]>>,
+    CCIfType<[i64], CCAssignToReg<[R30_R31, R28_R29]>>,
 
     CCIfByVal<CCPassByVal<1, 1>>
 ]>;
