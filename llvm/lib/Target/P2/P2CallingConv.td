@@ -41,4 +41,4 @@ def RetCC_P2 : CallingConv <[
     CCIfByVal<CCPassByVal<1, 1>>
 ]>;
 
-def CSR : CalleeSavedRegs<(add (sequence "R%u", 0, 29))> {}
+def CSR : CalleeSavedRegs<(add (sequence "R%u", 0, 31))> {}

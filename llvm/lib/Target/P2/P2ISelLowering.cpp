@@ -150,6 +150,9 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
     setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
 
+    setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
+    setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
+
     // 64 bit libcalls
     setOperationAction(ISD::SRL, MVT::i64, Custom);
     setOperationAction(ISD::SRA, MVT::i64, Custom);
@@ -157,8 +160,10 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::MUL, MVT::i64, LibCall);
     setOperationAction(ISD::SDIV, MVT::i64, LibCall);
     setOperationAction(ISD::SREM, MVT::i64, LibCall);
+    setOperationAction(ISD::SDIVREM, MVT::i64, LibCall);
     setOperationAction(ISD::UDIV, MVT::i64, LibCall);
     setOperationAction(ISD::UREM, MVT::i64, LibCall);
+    setOperationAction(ISD::UDIVREM, MVT::i64, LibCall);
 }
 
 SDValue P2TargetLowering::lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {
