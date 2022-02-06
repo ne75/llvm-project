@@ -638,6 +638,12 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
     MI.eraseFromParent();
 }
 
+void P2InstrInfo::expand_JMPuc(MachineInstr &MI) const {
+    MI.setDesc(get(P2::JMP));
+    MI.addOperand(MachineOperand::CreateReg(P2::SW, false));
+    MI.addOperand(MachineOperand::CreateImm(P2::ALWAYS));
+}
+
 bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     switch(MI.getOpcode()) {
         case P2::ADD64ri:
@@ -692,6 +698,10 @@ bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
         case P2::SELECTCC:
         case P2::SELECTCC64:
             expand_SELECTCC(MI);
+            return true;
+
+        case P2::JMPuc:
+            expand_JMPuc(MI);
             return true;
     } 
 
