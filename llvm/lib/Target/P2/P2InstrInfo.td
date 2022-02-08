@@ -515,6 +515,10 @@ let DecoderMethod = "DecodeIOInstruction", hasSideEffects = 1 in {
     defm DRVL       : P2InstCZLDm<0b1101011, 0b001011000, "drvl">;
     defm DRVH       : P2InstCZLDm<0b1101011, 0b001011001, "drvh">;
     defm DRVNOT     : P2InstCZLDm<0b1101011, 0b001011111, "drvnot">;
+    defm FLTL       : P2InstCZLDm<0b1101011, 0b001010000, "fltl">;
+    defm FLTH       : P2InstCZLDm<0b1101011, 0b001010001, "flth">;
+    defm FLTNOT     : P2InstCZLDm<0b1101011, 0b001010111, "fltnot">;
+
     let cz = 0b10 in defm TESTPc      : P2InstCZLDm<0b1101011, 0b001000000, "testp">;
     let cz = 0b01 in defm TESTPz      : P2InstCZLDm<0b1101011, 0b001000000, "testp">;
 }
@@ -579,3 +583,10 @@ def AUGS        : P2InstN<0b11110, (outs), (ins i32imm:$n23), "augs $n23">;
 def AUGD        : P2InstN<0b11111, (outs), (ins i32imm:$n23), "augd $n23">;
 
 def FRMIDX      : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src), "frmidx $dst, $src">;
+
+/*--------------------------------*/
+/* alias instructions             */
+/*--------------------------------*/
+
+def AKPINir     : InstAlias<"$cc akpin $s", (WRPINir 1, P2GPR:$s, P2Cond:$cc)>;
+def AKPINii     : InstAlias<"$cc akpin $s", (WRPINii 1, i32imm:$s, P2Cond:$cc)>;
