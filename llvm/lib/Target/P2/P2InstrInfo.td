@@ -561,9 +561,9 @@ defm SETSE3     : P2InstLDm<0b1101011, 0b000100010, "setse3">;
 defm SETSE4     : P2InstLDm<0b1101011, 0b000100011, "setse4">;
 
 def WAITSE1     : P2InstCZ<0b11010110, 0b000010100, 0b000100100, (outs), (ins), "waitse1">;
-def WAITSE2     : P2InstCZ<0b11010110, 0b000010100, 0b000100100, (outs), (ins), "waitse2">;
-def WAITSE3     : P2InstCZ<0b11010110, 0b000010100, 0b000100100, (outs), (ins), "waitse3">;
-def WAITSE4     : P2InstCZ<0b11010110, 0b000010100, 0b000100100, (outs), (ins), "waitse4">;
+def WAITSE2     : P2InstCZ<0b11010110, 0b000010101, 0b000100100, (outs), (ins), "waitse2">;
+def WAITSE3     : P2InstCZ<0b11010110, 0b000010110, 0b000100100, (outs), (ins), "waitse3">;
+def WAITSE4     : P2InstCZ<0b11010110, 0b000010111, 0b000100100, (outs), (ins), "waitse4">;
 
 defm ADDCT1     : P2InstIDSm<0b101001100, "addct1">;
 defm ADDCT2     : P2InstIDSm<0b101001101, "addct2">;
