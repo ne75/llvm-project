@@ -167,9 +167,24 @@ class P2InstCZIDS<bits<7> op, bits<1> i, dag outs, dag inputs, string asmstr> :
     let TSFlags{12-10} = d_num;
 }
 
-multiclass P2InstCZIDSm<bits<7> op, dag in_extra, string asmstr> {
-    def rr : P2InstCZIDS<op, 0b0, (outs P2GPR:$d), !con(in_extra, (ins P2GPR:$s)), !strconcat(asmstr, " $d, $s")>;
-    def ri : P2InstCZIDS<op, 0b1, (outs P2GPR:$d), !con(in_extra, (ins i32imm:$s)), !strconcat(asmstr, " $d, $s")>;
+// Standard version of this instruction, 1 input, 1 output
+multiclass P2InstCZIDSm<bits<7> op, string asmstr> {
+    def rr : P2InstCZIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
+    def ri : P2InstCZIDS<op, 0b1, (outs P2GPR:$d), (ins i32imm:$s), !strconcat(asmstr, " $d, $s")>;
+}
+
+// 2 inputs, 0 output version of this instruction
+multiclass P2InstCZIDS2im<bits<7> op, string asmstr> {
+    def rr : P2InstCZIDS<op, 0b0, (outs), (ins P2GPR:$d, P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
+    def ri : P2InstCZIDS<op, 0b1, (outs), (ins P2GPR:$d, i32imm:$s), !strconcat(asmstr, " $d, $s")>;
+}
+
+// 2 inputs, 1 output version of this instruction
+multiclass P2InstCZIDS2i1om<bits<7> op, string asmstr> {
+    let Constraints = "$s1 = $d", s_num = 2 in {
+        def rr : P2InstCZIDS<op, 0b0, (outs P2GPR:$d), (ins P2GPR:$s1, P2GPR:$s), !strconcat(asmstr, " $d, $s")>;
+        def ri : P2InstCZIDS<op, 0b1, (outs P2GPR:$d), (ins P2GPR:$s1, i32imm:$s), !strconcat(asmstr, " $d, $s")>;
+    }
 }
 
 // 6 bit opcode, a 3-bit N value for nib-based instructions, I flag, and two operands (D/S). S can be imm
