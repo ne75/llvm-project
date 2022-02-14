@@ -539,6 +539,7 @@ def COGIDr      : P2InstCLD<0b1101011, 0b000000001, 0b0, (outs P2GPR:$d), (ins),
 def GETCT       : P2InstCZD<0b1101011, 0b000011010, (outs P2GPR:$d), (ins), "getct $d">;
 
 defm COGINIT    : P2InstCLIDSm<0b1100111, "coginit">;
+defm COGSTOP    : P2InstLDm<0b1101011, 0b000000011, "cogstop">;
 defm WAITX      : P2InstCZLDm<0b1101011, 0b000011111, "waitx">;
 defm HUBSET     : P2InstLDm<0b1101011, 0b000000000, "hubset">;
 
