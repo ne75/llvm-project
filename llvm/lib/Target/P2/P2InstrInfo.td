@@ -95,51 +95,51 @@ def wrlut : PatFrag<(ops node:$val, node:$ptr), (P2WRLUT node:$val, node:$ptr)> 
 /*--------------------------------*/
 
 // place this first so that the below pattern matches before the standard addition pattern matches
-let Constraints = "$s1 = $d", s_num = 2 in {
-    defm SUB : P2InstCZIDSm<0b0001100, (ins P2GPR:$s1), "sub">;
-}
+defm SUB : P2InstCZIDS2i1om<0b0001100, "sub">;
 
 // convert add -c to sub c
 def : Pat<(sub P2GPR:$src1, P2GPR:$s), (SUBrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
 def : Pat<(sub P2GPR:$src1, imm:$s), (SUBri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(add i32:$d, NegSubInlineConst32:$s), (SUBri $d, NegSubInlineConst32:$s, always, noeff)>;
 
+
+defm ROR    : P2InstCZIDS2i1om<0b0000000, "ror">;
+defm ROL    : P2InstCZIDS2i1om<0b0000001, "rol">;
+defm SHR    : P2InstCZIDS2i1om<0b0000010, "shr">;
+defm SHL    : P2InstCZIDS2i1om<0b0000011, "shl">;
+defm RCR    : P2InstCZIDS2i1om<0b0000100, "rcr">;
+defm RCL    : P2InstCZIDS2i1om<0b0000101, "rcl">;
+defm SAR    : P2InstCZIDS2i1om<0b0000110, "sar">;
+defm SAL    : P2InstCZIDS2i1om<0b0000111, "sal">;
+defm ADD    : P2InstCZIDS2i1om<0b0001000, "add">;
+defm ADDX   : P2InstCZIDS2i1om<0b0001001, "addx">;
+defm ADDS   : P2InstCZIDS2i1om<0b0001010, "adds">;
+defm ADDSX  : P2InstCZIDS2i1om<0b0001011, "addsx">;
+defm SUBX   : P2InstCZIDS2i1om<0b0001101, "subx">;
+defm SUBS   : P2InstCZIDS2i1om<0b0001110, "subs">;
+defm SUBSX  : P2InstCZIDS2i1om<0b0001111, "subsx">;
+defm SUBR   : P2InstCZIDS2i1om<0b0010110, "subr">;
+defm AND    : P2InstCZIDS2i1om<0b0101000, "and">;
+defm OR     : P2InstCZIDS2i1om<0b0101010, "or">;
+defm XOR    : P2InstCZIDS2i1om<0b0101011, "xor">;
+defm SIGNX  : P2InstCZIDS2i1om<0b0111011, "signx">;
+
 let Constraints = "$s1 = $d", s_num = 2 in {
-    defm ROR    : P2InstCZIDSm<0b0000000, (ins P2GPR:$s1), "ror">;
-    defm ROL    : P2InstCZIDSm<0b0000001, (ins P2GPR:$s1), "rol">;
-    defm SHR    : P2InstCZIDSm<0b0000010, (ins P2GPR:$s1), "shr">;
-    defm SHL    : P2InstCZIDSm<0b0000011, (ins P2GPR:$s1), "shl">;
-    defm RCR    : P2InstCZIDSm<0b0000100, (ins P2GPR:$s1), "rcr">;
-    defm RCL    : P2InstCZIDSm<0b0000101, (ins P2GPR:$s1), "rcl">;
-    defm SAR    : P2InstCZIDSm<0b0000110, (ins P2GPR:$s1), "sar">;
-    defm SAL    : P2InstCZIDSm<0b0000111, (ins P2GPR:$s1), "sal">;
-    defm ADD    : P2InstCZIDSm<0b0001000, (ins P2GPR:$s1), "add">;
-    defm ADDX   : P2InstCZIDSm<0b0001001, (ins P2GPR:$s1), "addx">;
-    defm ADDS   : P2InstCZIDSm<0b0001010, (ins P2GPR:$s1), "adds">;
-    defm ADDSX  : P2InstCZIDSm<0b0001011, (ins P2GPR:$s1), "addsx">;
-    defm SUBX   : P2InstCZIDSm<0b0001101, (ins P2GPR:$s1), "subx">;
-    defm SUBS   : P2InstCZIDSm<0b0001110, (ins P2GPR:$s1), "subs">;
-    defm SUBSX  : P2InstCZIDSm<0b0001111, (ins P2GPR:$s1), "subsx">;
-    defm SUBR   : P2InstCZIDSm<0b0010110, (ins P2GPR:$s1), "subr">;
-    defm AND    : P2InstCZIDSm<0b0101000, (ins P2GPR:$s1), "and">;
-    defm OR     : P2InstCZIDSm<0b0101010, (ins P2GPR:$s1), "or">;
-    defm XOR    : P2InstCZIDSm<0b0101011, (ins P2GPR:$s1), "xor">;
-    defm SIGNX  : P2InstCZIDSm<0b0111011, (ins P2GPR:$s1), "signx">;
     defm MUL    : P2InstZIDSm<0b10100000, (ins P2GPR:$s1), "mul">;
     defm MULS   : P2InstZIDSm<0b10100001, (ins P2GPR:$s1), "muls">;
 }
 
-defm NOT    : P2InstCZIDSm<0b0110001, (ins), "not">;
-defm ABS    : P2InstCZIDSm<0b0110010, (ins), "abs">;
-defm NEG    : P2InstCZIDSm<0b0110011, (ins), "neg">;
+defm NOT    : P2InstCZIDSm<0b0110001, "not">;
+defm ABS    : P2InstCZIDSm<0b0110010, "abs">;
+defm NEG    : P2InstCZIDSm<0b0110011, "neg">;
 
 let Constraints = "$s = $d" in {
     def REV    : P2InstD<0b1101011, 0b001101001, (outs P2GPR:$d), (ins P2GPR:$s), "rev $d">;
 }
 
-defm ENCOD  : P2InstCZIDSm<0b0111100, (ins), "encod">;
+defm ENCOD  : P2InstCZIDSm<0b0111100, "encod">;
 defm DECOD  : P2InstIDSm<0b100111000, "decod">;
-defm ONES   : P2InstCZIDSm<0b0111101, (ins), "ones">;
+defm ONES   : P2InstCZIDSm<0b0111101, "ones">;
 
 // 64 bit pseudos
 let Constraints = "$s1 = $d" in {
@@ -284,7 +284,7 @@ let Constraints = "$s1 = $d", s_num = 2 in {
 
 defm REP    : P2InstLIDSm<0b11001101, "rep">;
 
-defm TEST   : P2InstCZIDSm<0b0111110, (ins), "test">;
+defm TEST   : P2InstCZIDSm<0b0111110, "test">;
 
 // Patterns for various branch conditions and types of branch instructions
 // unsigned comparison
@@ -392,16 +392,16 @@ def : Pat<(select P2GPR:$c, P2GPR:$t, imm:$f), (SELECTCC P2GPR:$c, 0, P2GPR:$t, 
 def : Pat<(select P2GPR:$c, imm:$t, P2GPR:$f), (SELECTCC P2GPR:$c, 0, imm:$t, P2GPR:$f, 1)>;
 def : Pat<(select P2GPR:$c, imm:$t, imm:$f), (SELECTCC P2GPR:$c, 0, imm:$t, imm:$f, 1)>;
 
-defm MOV        : P2InstCZIDSm<0b0110000, (ins), "mov">;
+defm MOV        : P2InstCZIDSm<0b0110000, "mov">;
 
 def MOVi64      : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s), "mov64 $d, $s">;
 
 def : Pat<(i64immleaf:$s), (MOVi64 imm:$s)>;
 def : Pat<(imm:$s), (MOVri imm:$s, always, noeff)>;
 
-defm RDBYTE     : P2InstCZIDSm<0b1010110, (ins), "rdbyte">;
-defm RDWORD     : P2InstCZIDSm<0b1010111, (ins), "rdword">;
-defm RDLONG     : P2InstCZIDSm<0b1011000, (ins), "rdlong">;
+defm RDBYTE     : P2InstCZIDSm<0b1010110, "rdbyte">;
+defm RDWORD     : P2InstCZIDSm<0b1010111, "rdword">;
+defm RDLONG     : P2InstCZIDSm<0b1011000, "rdlong">;
 
 defm WRBYTE     : P2InstLIDSm<0b11000100, "wrbyte">;
 defm WRWORD     : P2InstLIDSm<0b11000101, "wrword">;
@@ -414,7 +414,7 @@ def RFLONG      : P2InstCZD<0b1101011, 0b000010010, (outs P2GPR:$d), (ins), "rfl
 defm SETQ       : P2InstLDm<0b1101011, 0b000101000, "setq">;
 defm SETQ2      : P2InstLDm<0b1101011, 0b000101001, "setq2">;
 
-defm RDLUT      : P2InstCZIDSm<0b1010101, (ins), "rdlut">;
+defm RDLUT      : P2InstCZIDSm<0b1010101, "rdlut">;
 defm WRLUT      : P2InstLIDSm<0b11000011, "wrlut">;
 
 defm RDFAST     : P2InstLIDSm<0b11000111, "rdfast">;
@@ -509,6 +509,7 @@ let DecoderMethod = "DecodeIOInstruction", hasSideEffects = 1 in {
 
     defm DIRL       : P2InstCZLDm<0b1101011, 0b001000000, "dirl">;
     defm DIRH       : P2InstCZLDm<0b1101011, 0b001000001, "dirh">;
+    defm DIRNOT     : P2InstCZLDm<0b1101011, 0b001000111, "dirnot">;
     defm OUTL       : P2InstCZLDm<0b1101011, 0b001001000, "outl">;
     defm OUTH       : P2InstCZLDm<0b1101011, 0b001001001, "outh">;
     defm OUTNOT     : P2InstCZLDm<0b1101011, 0b001001111, "outnot">;
@@ -521,7 +522,17 @@ let DecoderMethod = "DecodeIOInstruction", hasSideEffects = 1 in {
 
     let cz = 0b10 in defm TESTPc      : P2InstCZLDm<0b1101011, 0b001000000, "testp">;
     let cz = 0b01 in defm TESTPz      : P2InstCZLDm<0b1101011, 0b001000000, "testp">;
+
+    let cz = 0b10 in defm TESTPNc     : P2InstCZLDm<0b1101011, 0b001000001, "testpn">;
+    let cz = 0b01 in defm TESTPNz     : P2InstCZLDm<0b1101011, 0b001000001, "testpn">;
 }
+
+// Special test instructions that require c or z
+let cz = 0b10 in defm TESTBc    : P2InstCZIDS2im<0b0100000, "testb">;
+let cz = 0b01 in defm TESTBz    : P2InstCZIDS2im<0b0100000, "testb">;
+
+let cz = 0b10 in defm TESTBNc   : P2InstCZIDS2im<0b0100001, "testbn">;
+let cz = 0b01 in defm TESTBNz   : P2InstCZIDS2im<0b0100001, "testbn">;
 
 // no multiclass, since this is an output instead of an input
 def COGIDr      : P2InstCLD<0b1101011, 0b000000001, 0b0, (outs P2GPR:$d), (ins), "cogid $d">;
