@@ -380,6 +380,14 @@ bool P2Symbolizer::tryAddingSymbolicOperand(MCInst &Inst,
         return false;
     }
 
+    if (Value == 0) {
+        // If we are disassembling a complete program, branches to 0 are not possible, (except for in custom COG code)
+        // so leave it as 0.
+        // If we are disassembling an object file with fixups, I don't know how to get that data in this function, 
+        // so don't try to create a symbol.
+        return false;
+    }
+
     auto *Symbols = static_cast<SectionSymbolsTy *>(DisInfo);
     if (!Symbols) {
         return false;
