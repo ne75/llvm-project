@@ -212,7 +212,19 @@ public:
   /// Returns the offset in bytes from the start of the input buffer
   ///        of the first explicit kernel argument.
   unsigned getExplicitKernelArgOffset(const Function &F) const {
-    return isAmdHsaOrMesa(F) ? 0 : 36;
+    switch (TargetTriple.getOS()) {
+    case Triple::AMDHSA:
+    case Triple::AMDPAL:
+    case Triple::Mesa3D:
+      return 0;
+    case Triple::UnknownOS:
+    default:
+      // For legacy reasons unknown/other is treated as a different version of
+      // mesa.
+      return 36;
+    }
+
+    llvm_unreachable("invalid triple OS");
   }
 
   /// \returns Maximum number of work groups per compute unit supported by the
@@ -251,11 +263,11 @@ public:
   uint64_t getExplicitKernArgSize(const Function &F, Align &MaxAlign) const;
   unsigned getKernArgSegmentSize(const Function &F, Align &MaxAlign) const;
 
-  /// \returns Corresponsing DWARF register number mapping flavour for the
+  /// \returns Corresponding DWARF register number mapping flavour for the
   /// \p WavefrontSize.
   AMDGPUDwarfFlavour getAMDGPUDwarfFlavour() const;
 
-  virtual ~AMDGPUSubtarget() {}
+  virtual ~AMDGPUSubtarget() = default;
 };
 
 } // end namespace llvm

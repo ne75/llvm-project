@@ -1,4 +1,4 @@
-// RUN: mlir-opt %s -convert-linalg-to-loops -convert-scf-to-std -convert-linalg-to-llvm -convert-memref-to-llvm -convert-std-to-llvm -reconcile-unrealized-casts | \
+// RUN: mlir-opt %s -convert-linalg-to-loops -convert-scf-to-cf -convert-linalg-to-llvm -convert-memref-to-llvm -convert-std-to-llvm -reconcile-unrealized-casts | \
 // RUN: mlir-cpu-runner -O3 -e main -entry-point-result=void \
 // RUN:   -shared-libs=%mlir_integration_test_dir/libmlir_runner_utils%shlibext \
 // RUN: | FileCheck %s
@@ -26,6 +26,7 @@ func @main() {
   call @print_memref_f32(%B_) : (memref<*xf32>) -> ()
   %C_ = memref.cast %C : memref<?xf32, offset: ?, strides: [?]> to memref<*xf32>
   call @print_memref_f32(%C_) : (memref<*xf32>) -> ()
+  memref.dealloc %A : memref<?x?xf32>
   return
 }
 

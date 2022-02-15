@@ -20,11 +20,13 @@ using namespace _OMP;
 
 #pragma omp declare target
 
-extern uint32_t __omp_rtl_debug_kind;
+extern uint32_t __omp_rtl_debug_kind; // defined by CGOpenMPRuntimeGPU
 
-// TOOD: We want to change the name as soon as the old runtime is gone.
+// TODO: We want to change the name as soon as the old runtime is gone.
+// This variable should be visibile to the plugin so we override the default
+// hidden visibility.
 DeviceEnvironmentTy CONSTANT(omptarget_device_environment)
-    __attribute__((used));
+    __attribute__((used, retain, weak, visibility("protected")));
 
 uint32_t config::getDebugKind() {
   return __omp_rtl_debug_kind & omptarget_device_environment.DebugKind;

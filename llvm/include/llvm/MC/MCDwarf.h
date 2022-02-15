@@ -19,14 +19,12 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/MC/MCSection.h"
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/MD5.h"
 #include <cassert>
 #include <cstdint>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -36,6 +34,7 @@ template <typename T> class ArrayRef;
 class MCAsmBackend;
 class MCContext;
 class MCObjectStreamer;
+class MCSection;
 class MCStreamer;
 class MCSymbol;
 class raw_ostream;
@@ -188,6 +187,15 @@ public:
 
   MCSymbol *getLabel() const { return Label; }
 
+  // This indicates the line entry is synthesized for an end entry.
+  bool IsEndEntry = false;
+
+  // Override the label with the given EndLabel.
+  void setEndLabel(MCSymbol *EndLabel) {
+    Label = EndLabel;
+    IsEndEntry = true;
+  }
+
   // This is called when an instruction is assembled into the specified
   // section and if there is information from the last .loc directive that
   // has yet to have a line entry made for it is made.
@@ -204,6 +212,10 @@ public:
   void addLineEntry(const MCDwarfLineEntry &LineEntry, MCSection *Sec) {
     MCLineDivisions[Sec].push_back(LineEntry);
   }
+
+  // Add an end entry by cloning the last entry, if exists, for the section
+  // the given EndLabel belongs to. The label is replaced by the given EndLabel.
+  void addEndEntry(MCSymbol *EndLabel);
 
   using MCDwarfLineEntryCollection = std::vector<MCDwarfLineEntry>;
   using iterator = MCDwarfLineEntryCollection::iterator;

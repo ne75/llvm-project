@@ -9,6 +9,7 @@ from lldb.plugins.scripted_process import ScriptedThread
 class DummyScriptedProcess(ScriptedProcess):
     def __init__(self, target: lldb.SBTarget, args : lldb.SBStructuredData):
         super().__init__(target, args)
+        self.threads[0] = DummyScriptedThread(self, None)
 
     def get_memory_region_containing_address(self, addr: int) -> lldb.SBMemoryRegionInfo:
         return None
@@ -43,8 +44,8 @@ class DummyScriptedProcess(ScriptedProcess):
 
 
 class DummyScriptedThread(ScriptedThread):
-    def __init__(self, target):
-        super().__init__(target)
+    def __init__(self, process, args):
+        super().__init__(process, args)
 
     def get_thread_id(self) -> int:
         return 0x19

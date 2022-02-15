@@ -19,10 +19,11 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
-#include "mlir/IR/FunctionSupport.h"
+#include "mlir/IR/FunctionInterfaces.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/SymbolTable.h"
+#include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 namespace mlir {
@@ -40,6 +41,14 @@ struct KernelDim3 {
 
 class AsyncTokenType
     : public Type::TypeBase<AsyncTokenType, Type, TypeStorage> {
+public:
+  // Used for generic hooks in TypeBase.
+  using Base::Base;
+};
+
+/// Device-side token storage type. There is only one type of device-side token.
+class DeviceAsyncTokenType
+    : public Type::TypeBase<DeviceAsyncTokenType, Type, TypeStorage> {
 public:
   // Used for generic hooks in TypeBase.
   using Base::Base;
@@ -163,12 +172,17 @@ public:
 // Adds a `gpu.async.token` to the front of the argument list.
 void addAsyncDependency(Operation *op, Value token);
 
-} // end namespace gpu
-} // end namespace mlir
+} // namespace gpu
+} // namespace mlir
+
+#include "mlir/Dialect/GPU/GPUOpsEnums.h.inc"
 
 #include "mlir/Dialect/GPU/GPUOpsDialect.h.inc"
 
 #include "mlir/Dialect/GPU/GPUOpInterfaces.h.inc"
+
+#define GET_ATTRDEF_CLASSES
+#include "mlir/Dialect/GPU/GPUOpsAttributes.h.inc"
 
 #define GET_OP_CLASSES
 #include "mlir/Dialect/GPU/GPUOps.h.inc"

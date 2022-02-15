@@ -13,6 +13,7 @@
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/Timer.h"
+#include "llvm/DebugInfo/DWARF/DWARFDebugLoc.h"
 #include "llvm/Object/Error.h"
 
 #include "DWARFCompileUnit.h"
@@ -49,6 +50,7 @@ void DWARFUnit::ExtractUnitDIENoDwoIfNeeded() {
   if (m_first_die)
     return; // Already parsed
 
+  ElapsedTime elapsed(m_dwarf.GetDebugInfoParseTimeRef());
   LLDB_SCOPED_TIMERF("%8.8x: DWARFUnit::ExtractUnitDIENoDwoIfNeeded()",
                      GetOffset());
 
@@ -196,6 +198,7 @@ DWARFUnit::ScopedExtractDIEs &DWARFUnit::ScopedExtractDIEs::operator=(
 void DWARFUnit::ExtractDIEsRWLocked() {
   llvm::sys::ScopedWriter first_die_lock(m_first_die_mutex);
 
+  ElapsedTime elapsed(m_dwarf.GetDebugInfoParseTimeRef());
   LLDB_SCOPED_TIMERF("%8.8x: DWARFUnit::ExtractDIEsIfNeeded()", GetOffset());
 
   // Set the offset to that of the first DIE and calculate the start of the

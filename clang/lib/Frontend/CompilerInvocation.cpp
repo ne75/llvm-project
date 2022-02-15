@@ -438,7 +438,7 @@ static T extractMaskValue(T KeyPath) {
     }(EXTRACTOR(KEYPATH));                                                     \
   }
 
-static const StringRef GetInputKindName(InputKind IK);
+static StringRef GetInputKindName(InputKind IK);
 
 static bool FixupInvocation(CompilerInvocation &Invocation,
                             DiagnosticsEngine &Diags, const ArgList &Args,
@@ -612,9 +612,8 @@ using GenerateFn = llvm::function_ref<void(
     CompilerInvocation::StringAllocator)>;
 
 // May perform round-trip of command line arguments. By default, the round-trip
-// is enabled if CLANG_ROUND_TRIP_CC1_ARGS was defined during build. This can be
-// overwritten at run-time via the "-round-trip-args" and "-no-round-trip-args"
-// command line flags.
+// is enabled in assert builds. This can be overwritten at run-time via the
+// "-round-trip-args" and "-no-round-trip-args" command line flags.
 // During round-trip, the command line arguments are parsed into a dummy
 // instance of CompilerInvocation which is used to generate the command line
 // arguments again. The real CompilerInvocation instance is then created by
@@ -624,8 +623,7 @@ static bool RoundTrip(ParseFn Parse, GenerateFn Generate,
                       CompilerInvocation &DummyInvocation,
                       ArrayRef<const char *> CommandLineArgs,
                       DiagnosticsEngine &Diags, const char *Argv0) {
-  // FIXME: Switch to '#ifndef NDEBUG' when possible.
-#ifdef CLANG_ROUND_TRIP_CC1_ARGS
+#ifndef NDEBUG
   bool DoRoundTripDefault = true;
 #else
   bool DoRoundTripDefault = false;
@@ -772,9 +770,7 @@ static void parseAnalyzerConfigs(AnalyzerOptions &AnOpts,
 static void getAllNoBuiltinFuncValues(ArgList &Args,
                                       std::vector<std::string> &Funcs) {
   std::vector<std::string> Values = Args.getAllArgValues(OPT_fno_builtin_);
-  auto BuiltinEnd = llvm::partition(Values, [](const std::string FuncName) {
-    return Builtin::Context::isBuiltinFunc(FuncName);
-  });
+  auto BuiltinEnd = llvm::partition(Values, Builtin::Context::isBuiltinFunc);
   Funcs.insert(Funcs.end(), Values.begin(), BuiltinEnd);
 }
 
@@ -999,7 +995,7 @@ static bool ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
                      diag::err_analyzer_config_no_value) << configVal;
         break;
       }
-      if (val.find('=') != StringRef::npos) {
+      if (val.contains('=')) {
         Diags.Report(SourceLocation(),
                      diag::err_analyzer_config_multiple_values)
           << configVal;
@@ -1287,7 +1283,7 @@ static std::string serializeXRayInstrumentationBundle(const XRayInstrSet &S) {
   std::string Buffer;
   llvm::raw_string_ostream OS(Buffer);
   llvm::interleave(BundleParts, OS, [&OS](StringRef Part) { OS << Part; }, ",");
-  return OS.str();
+  return Buffer;
 }
 
 // Set the profile kind using fprofile-instrument-use-path.
@@ -1818,6 +1814,9 @@ bool CompilerInvocation::ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args,
       Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args) << Name;
   }
 
+  if (Opts.PrepareForLTO && Args.hasArg(OPT_mibt_seal))
+    Opts.IBTSeal = 1;
+
   for (auto *A :
        Args.filtered(OPT_mlink_bitcode_file, OPT_mlink_builtin_bitcode)) {
     CodeGenOptions::BitcodeFileToLink F;
@@ -2061,13 +2060,13 @@ static bool ParseDependencyOutputArgs(DependencyOutputOptions &Opts,
   if (!Args.hasArg(OPT_fno_sanitize_ignorelist)) {
     for (const auto *A : Args.filtered(OPT_fsanitize_ignorelist_EQ)) {
       StringRef Val = A->getValue();
-      if (Val.find('=') == StringRef::npos)
+      if (!Val.contains('='))
         Opts.ExtraDeps.emplace_back(std::string(Val), EDK_SanitizeIgnorelist);
     }
     if (Opts.IncludeSystemHeaders) {
       for (const auto *A : Args.filtered(OPT_fsanitize_system_ignorelist_EQ)) {
         StringRef Val = A->getValue();
-        if (Val.find('=') == StringRef::npos)
+        if (!Val.contains('='))
           Opts.ExtraDeps.emplace_back(std::string(Val), EDK_SanitizeIgnorelist);
       }
     }
@@ -2084,7 +2083,7 @@ static bool ParseDependencyOutputArgs(DependencyOutputOptions &Opts,
   // Only the -fmodule-file=<file> form.
   for (const auto *A : Args.filtered(OPT_fmodule_file)) {
     StringRef Val = A->getValue();
-    if (Val.find('=') == StringRef::npos)
+    if (!Val.contains('='))
       Opts.ExtraDeps.emplace_back(std::string(Val), EDK_ModuleFile);
   }
 
@@ -2407,8 +2406,8 @@ static const auto &getFrontendActionTable() {
       {frontend::EmitLLVM, OPT_emit_llvm},
       {frontend::EmitLLVMOnly, OPT_emit_llvm_only},
       {frontend::EmitCodeGenOnly, OPT_emit_codegen_only},
-      {frontend::EmitCodeGenOnly, OPT_emit_codegen_only},
       {frontend::EmitObj, OPT_emit_obj},
+      {frontend::ExtractAPI, OPT_extract_api},
 
       {frontend::FixIt, OPT_fixit_EQ},
       {frontend::FixIt, OPT_fixit},
@@ -2728,7 +2727,7 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   // Only the -fmodule-file=<file> form.
   for (const auto *A : Args.filtered(OPT_fmodule_file)) {
     StringRef Val = A->getValue();
-    if (Val.find('=') == StringRef::npos)
+    if (!Val.contains('='))
       Opts.ModuleFiles.push_back(std::string(Val));
   }
 
@@ -3003,7 +3002,7 @@ static bool ParseHeaderSearchArgs(HeaderSearchOptions &Opts, ArgList &Args,
   // Only the -fmodule-file=<name>=<file> form.
   for (const auto *A : Args.filtered(OPT_fmodule_file)) {
     StringRef Val = A->getValue();
-    if (Val.find('=') != StringRef::npos){
+    if (Val.contains('=')) {
       auto Split = Val.split('=');
       Opts.PrebuiltModuleFiles.insert(
           {std::string(Split.first), std::string(Split.second)});
@@ -3295,7 +3294,7 @@ static bool IsInputCompatibleWithStandard(InputKind IK,
 }
 
 /// Get language name for given input kind.
-static const StringRef GetInputKindName(InputKind IK) {
+static StringRef GetInputKindName(InputKind IK) {
   switch (IK.getLanguage()) {
   case Language::C:
     return "C";
@@ -3456,6 +3455,8 @@ void CompilerInvocation::GenerateLangArgs(const LangOptions &Opts,
     GenerateArg(Args, OPT_mlong_double_128, SA);
   else if (Opts.LongDoubleSize == 64)
     GenerateArg(Args, OPT_mlong_double_64, SA);
+  else if (Opts.LongDoubleSize == 80)
+    GenerateArg(Args, OPT_mlong_double_80, SA);
 
   // Not generating '-mrtd', it's just an alias for '-fdefault-calling-conv='.
 
@@ -3483,9 +3484,6 @@ void CompilerInvocation::GenerateLangArgs(const LangOptions &Opts,
     if (Opts.OpenMP != 50)
       GenerateArg(Args, OPT_fopenmp_version_EQ, Twine(Opts.OpenMP), SA);
   }
-
-  if (Opts.OpenMPTargetNewRuntime)
-    GenerateArg(Args, OPT_fopenmp_target_new_runtime, SA);
 
   if (Opts.OpenMPThreadSubscription)
     GenerateArg(Args, OPT_fopenmp_assume_threads_oversubscription, SA);
@@ -3560,6 +3558,8 @@ void CompilerInvocation::GenerateLangArgs(const LangOptions &Opts,
     GenerateArg(Args, OPT_fclang_abi_compat_EQ, "11.0", SA);
   else if (Opts.getClangABICompat() == LangOptions::ClangABI::Ver12)
     GenerateArg(Args, OPT_fclang_abi_compat_EQ, "12.0", SA);
+  else if (Opts.getClangABICompat() == LangOptions::ClangABI::Ver13)
+    GenerateArg(Args, OPT_fclang_abi_compat_EQ, "13.0", SA);
 
   if (Opts.getSignReturnAddressScope() ==
       LangOptions::SignReturnAddressScopeKind::All)
@@ -3839,9 +3839,16 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
   Opts.NoBuiltin = Args.hasArg(OPT_fno_builtin) || Opts.Freestanding;
   if (!Opts.NoBuiltin)
     getAllNoBuiltinFuncValues(Args, Opts.NoBuiltinFuncs);
-  Opts.LongDoubleSize = Args.hasArg(OPT_mlong_double_128)
-                            ? 128
-                            : Args.hasArg(OPT_mlong_double_64) ? 64 : 0;
+  if (Arg *A = Args.getLastArg(options::OPT_LongDouble_Group)) {
+    if (A->getOption().matches(options::OPT_mlong_double_64))
+      Opts.LongDoubleSize = 64;
+    else if (A->getOption().matches(options::OPT_mlong_double_80))
+      Opts.LongDoubleSize = 80;
+    else if (A->getOption().matches(options::OPT_mlong_double_128))
+      Opts.LongDoubleSize = 128;
+    else
+      Opts.LongDoubleSize = 0;
+  }
   if (Opts.FastRelaxedMath)
     Opts.setDefaultFPContractMode(LangOptions::FPM_Fast);
   llvm::sort(Opts.ModuleFeatures);
@@ -3875,9 +3882,6 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
       Opts.OpenMP && Args.hasArg(options::OPT_fopenmp_enable_irbuilder);
   bool IsTargetSpecified =
       Opts.OpenMPIsDevice || Args.hasArg(options::OPT_fopenmp_targets_EQ);
-  Opts.OpenMPTargetNewRuntime =
-      Opts.OpenMPIsDevice &&
-      Args.hasArg(options::OPT_fopenmp_target_new_runtime);
 
   Opts.ConvergentFunctions = Opts.ConvergentFunctions || Opts.OpenMPIsDevice;
 
@@ -3925,17 +3929,13 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
   // Set either by a specific value or to a default if not specified.
   if (Opts.OpenMPIsDevice && (Args.hasArg(OPT_fopenmp_target_debug) ||
                               Args.hasArg(OPT_fopenmp_target_debug_EQ))) {
-    if (Opts.OpenMPTargetNewRuntime) {
-      Opts.OpenMPTargetDebug = getLastArgIntValue(
-          Args, OPT_fopenmp_target_debug_EQ, Opts.OpenMPTargetDebug, Diags);
-      if (!Opts.OpenMPTargetDebug && Args.hasArg(OPT_fopenmp_target_debug))
-        Opts.OpenMPTargetDebug = 1;
-    } else {
-      Diags.Report(diag::err_drv_debug_no_new_runtime);
-    }
+    Opts.OpenMPTargetDebug = getLastArgIntValue(
+        Args, OPT_fopenmp_target_debug_EQ, Opts.OpenMPTargetDebug, Diags);
+    if (!Opts.OpenMPTargetDebug && Args.hasArg(OPT_fopenmp_target_debug))
+      Opts.OpenMPTargetDebug = 1;
   }
 
-  if (Opts.OpenMPIsDevice && Opts.OpenMPTargetNewRuntime) {
+  if (Opts.OpenMPIsDevice) {
     if (Args.hasArg(OPT_fopenmp_assume_teams_oversubscription))
       Opts.OpenMPTeamSubscription = true;
     if (Args.hasArg(OPT_fopenmp_assume_threads_oversubscription))
@@ -4062,6 +4062,8 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
         Opts.setClangABICompat(LangOptions::ClangABI::Ver11);
       else if (Major <= 12)
         Opts.setClangABICompat(LangOptions::ClangABI::Ver12);
+      else if (Major <= 13)
+        Opts.setClangABICompat(LangOptions::ClangABI::Ver13);
     } else if (Ver != "latest") {
       Diags.Report(diag::err_drv_invalid_value)
           << A->getAsString(Args) << A->getValue();
@@ -4125,6 +4127,13 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
         {std::string(Split.first), std::string(Split.second)});
   }
 
+  // Error if -mvscale-min is unbounded.
+  if (Arg *A = Args.getLastArg(options::OPT_mvscale_min_EQ)) {
+    unsigned VScaleMin;
+    if (StringRef(A->getValue()).getAsInteger(10, VScaleMin) || VScaleMin == 0)
+      Diags.Report(diag::err_cc1_unbounded_vscale_min);
+  }
+
   return Diags.getNumErrors() == NumErrorsBefore;
 }
 
@@ -4141,6 +4150,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
   case frontend::EmitLLVMOnly:
   case frontend::EmitCodeGenOnly:
   case frontend::EmitObj:
+  case frontend::ExtractAPI:
   case frontend::FixIt:
   case frontend::GenerateModule:
   case frontend::GenerateModuleInterface:
@@ -4392,6 +4402,9 @@ static void GenerateTargetArgs(const TargetOptions &Opts,
   if (!Opts.SDKVersion.empty())
     GenerateArg(Args, OPT_target_sdk_version_EQ, Opts.SDKVersion.getAsString(),
                 SA);
+  if (!Opts.DarwinTargetVariantSDKVersion.empty())
+    GenerateArg(Args, OPT_darwin_target_variant_sdk_version_EQ,
+                Opts.DarwinTargetVariantSDKVersion.getAsString(), SA);
 }
 
 static bool ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
@@ -4418,6 +4431,15 @@ static bool ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
           << A->getAsString(Args) << A->getValue();
     else
       Opts.SDKVersion = Version;
+  }
+  if (Arg *A =
+          Args.getLastArg(options::OPT_darwin_target_variant_sdk_version_EQ)) {
+    llvm::VersionTuple Version;
+    if (Version.tryParse(A->getValue()))
+      Diags.Report(diag::err_drv_invalid_value)
+          << A->getAsString(Args) << A->getValue();
+    else
+      Opts.DarwinTargetVariantSDKVersion = Version;
   }
 
   return Diags.getNumErrors() == NumErrorsBefore;
@@ -4515,7 +4537,7 @@ bool CompilerInvocation::CreateFromArgsImpl(
 
   // Store the command-line for using in the CodeView backend.
   Res.getCodeGenOpts().Argv0 = Argv0;
-  Res.getCodeGenOpts().CommandLineArgs = CommandLineArgs;
+  append_range(Res.getCodeGenOpts().CommandLineArgs, CommandLineArgs);
 
   FixupInvocation(Res, Diags, Args, DashX);
 

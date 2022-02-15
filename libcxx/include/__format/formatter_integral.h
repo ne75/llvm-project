@@ -10,15 +10,16 @@
 #ifndef _LIBCPP___FORMAT_FORMATTER_INTEGRAL_H
 #define _LIBCPP___FORMAT_FORMATTER_INTEGRAL_H
 
+#include <__algorithm/copy.h>
+#include <__algorithm/copy_n.h>
+#include <__algorithm/fill_n.h>
+#include <__algorithm/transform.h>
 #include <__config>
 #include <__format/format_error.h>
 #include <__format/format_fwd.h>
 #include <__format/formatter.h>
 #include <__format/parser_std_format_spec.h>
-#include <__algorithm/copy.h>
-#include <__algorithm/copy_n.h>
-#include <__algorithm/fill_n.h>
-#include <__algorithm/transform.h>
+#include <__utility/unreachable.h>
 #include <array>
 #include <charconv>
 #include <concepts>
@@ -30,7 +31,7 @@
 #endif
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
-#pragma GCC system_header
+#  pragma GCC system_header
 #endif
 
 _LIBCPP_PUSH_MACROS
@@ -82,7 +83,7 @@ _LIBCPP_BEGIN_NAMESPACE_STD
 namespace __format_spec {
 
 /** Wrapper around @ref to_chars, returning the output pointer. */
-template <class _Tp>
+template <integral _Tp>
 _LIBCPP_HIDE_FROM_ABI char* __to_buffer(char* __first, char* __last,
                                         _Tp __value, int __base) {
   // TODO FMT Evaluate code overhead due to not calling the internal function
@@ -133,45 +134,6 @@ _LIBCPP_HIDE_FROM_ABI constexpr size_t __buffer_size() noexcept
          + 1;                        // Reserve space for the sign.
 }
 
-_LIBCPP_HIDE_FROM_ABI inline char* __insert_sign(char* __buf, bool __negative,
-                                                 _Flags::_Sign __sign) {
-  if (__negative)
-    *__buf++ = '-';
-  else
-    switch (__sign) {
-    case _Flags::_Sign::__default:
-    case _Flags::_Sign::__minus:
-      // No sign added.
-      break;
-    case _Flags::_Sign::__plus:
-      *__buf++ = '+';
-      break;
-    case _Flags::_Sign::__space:
-      *__buf++ = ' ';
-      break;
-    }
-
-  return __buf;
-}
-
-_LIBCPP_HIDE_FROM_ABI constexpr char __hex_to_upper(char c) {
-  switch (c) {
-  case 'a':
-    return 'A';
-  case 'b':
-    return 'B';
-  case 'c':
-    return 'C';
-  case 'd':
-    return 'D';
-  case 'e':
-    return 'E';
-  case 'f':
-    return 'F';
-  }
-  return c;
-}
-
 /**
  * Determines the required grouping based on the size of the input.
  *
@@ -215,7 +177,7 @@ __determine_grouping(ptrdiff_t __size, const string& __grouping) {
     }
   }
 
-  _LIBCPP_UNREACHABLE();
+  __libcpp_unreachable();
 }
 
 template <class _Parser>
@@ -331,7 +293,7 @@ private:
     }
     default:
       _LIBCPP_ASSERT(false, "The parser should have validated the type");
-      _LIBCPP_UNREACHABLE();
+      __libcpp_unreachable();
     }
   }
 
@@ -404,7 +366,7 @@ private:
       __out_it = _VSTD::copy(__begin, __first, _VSTD::move(__out_it));
       this->__alignment = _Flags::_Alignment::__right;
       this->__fill = _CharT('0');
-      unsigned __size = __first - __begin;
+      uint32_t __size = __first - __begin;
       this->__width -= _VSTD::min(__size, this->__width);
     }
 

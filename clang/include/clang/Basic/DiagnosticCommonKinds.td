@@ -145,6 +145,13 @@ def warn_conflicting_nullability_attr_overriding_param_types : Warning<
 def err_nullability_conflicting : Error<
   "nullability specifier %0 conflicts with existing specifier %1">;
 
+def warn_incompatible_branch_protection_option: Warning <
+  "'-mbranch-protection=' option is incompatible with the '%0' architecture">,
+  InGroup<BranchProtection>;
+
+def warn_target_unsupported_branch_protection_attribute: Warning <
+  "ignoring the 'branch-protection' attribute because the '%0' architecture does not support it">,
+  InGroup<BranchProtection>;
 }
 
 // OpenCL Section 6.8.g
@@ -298,6 +305,8 @@ def err_target_unsupported_unaligned : Error<
   "the %0 sub-architecture does not support unaligned accesses">;
 def err_target_unsupported_execute_only : Error<
   "execute only is not supported for the %0 sub-architecture">;
+def err_target_unsupported_tp_hard : Error<
+  "hardware TLS register is not supported for the %0 sub-architecture">;
 def err_target_unsupported_mcmse : Error<
   "-mcmse is not supported for %0">;
 def err_opt_not_valid_with_opt : Error<
@@ -308,6 +317,11 @@ def err_opt_not_valid_on_target : Error<
   "option '%0' cannot be specified on this target">;
 def err_invalid_feature_combination : Error<
   "invalid feature combination: %0">;
+
+// Eval method
+def warn_no_support_for_eval_method_source_on_m32 : Warning<
+  "Setting FPEvalMethod to source on a 32bit target, with no SSE is"
+  " not supported.">;
 
 // Source manager
 def err_cannot_open_file : Error<"cannot open file '%0': %1">, DefaultFatal;

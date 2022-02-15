@@ -61,7 +61,7 @@ SymbolFileDWARFDebugMap::CompileUnitInfo::GetFileRangeMap(
   if (!oso_objfile)
     return file_range_map;
 
-  Log *log(LogChannelDWARF::GetLogIfAll(DWARF_LOG_DEBUG_MAP));
+  Log *log = GetLog(DWARFLog::DebugMap);
   LLDB_LOGF(
       log,
       "%p: SymbolFileDWARFDebugMap::CompileUnitInfo::GetFileRangeMap ('%s')",
@@ -228,12 +228,7 @@ void SymbolFileDWARFDebugMap::Terminate() {
   PluginManager::UnregisterPlugin(CreateInstance);
 }
 
-lldb_private::ConstString SymbolFileDWARFDebugMap::GetPluginNameStatic() {
-  static ConstString g_name("dwarf-debugmap");
-  return g_name;
-}
-
-const char *SymbolFileDWARFDebugMap::GetPluginDescriptionStatic() {
+llvm::StringRef SymbolFileDWARFDebugMap::GetPluginDescriptionStatic() {
   return "DWARF and DWARF3 debug symbol file reader (debug map).";
 }
 
@@ -286,7 +281,7 @@ void SymbolFileDWARFDebugMap::InitOSO() {
 
   Symtab *symtab = m_objfile_sp->GetSymtab();
   if (symtab) {
-    Log *log(LogChannelDWARF::GetLogIfAll(DWARF_LOG_DEBUG_MAP));
+    Log *log = GetLog(DWARFLog::DebugMap);
 
     std::vector<uint32_t> oso_indexes;
     // When a mach-o symbol is encoded, the n_type field is encoded in bits
@@ -528,8 +523,8 @@ SymbolFileDWARFDebugMap::GetSymbolFileByOSOIndex(uint32_t oso_idx) {
 
 SymbolFileDWARF *
 SymbolFileDWARFDebugMap::GetSymbolFileAsSymbolFileDWARF(SymbolFile *sym_file) {
-  if (sym_file && sym_file->GetPluginName() ==
-                      SymbolFileDWARF::GetPluginNameStatic().GetStringRef())
+  if (sym_file &&
+      sym_file->GetPluginName() == SymbolFileDWARF::GetPluginNameStatic())
     return static_cast<SymbolFileDWARF *>(sym_file);
   return nullptr;
 }
@@ -1433,4 +1428,18 @@ SymbolFileDWARFDebugMap::AddOSOARanges(SymbolFileDWARF *dwarf2Data,
     }
   }
   return num_line_entries_added;
+}
+
+ModuleList SymbolFileDWARFDebugMap::GetDebugInfoModules() {
+  ModuleList oso_modules;
+  ForEachSymbolFile([&](SymbolFileDWARF *oso_dwarf) -> bool {
+    ObjectFile *oso_objfile = oso_dwarf->GetObjectFile();
+    if (oso_objfile) {
+      ModuleSP module_sp = oso_objfile->GetModule();
+      if (module_sp)
+        oso_modules.Append(module_sp);
+    }
+    return false; // Keep iterating
+  });
+  return oso_modules;
 }

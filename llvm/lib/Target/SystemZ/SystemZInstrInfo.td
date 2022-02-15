@@ -336,13 +336,25 @@ let isCall = 1, isTerminator = 1, isReturn = 1 in {
   def CLGIBCall : Alias<6, (outs), (ins GR64:$R1, imm64zx8:$I2, cond4:$M3, ADDR64:$R4), []>;
 }
 
-// A return instruction (br %r14) for ELF and (b 2 %r7) for XPLink.
-let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1 in
-  def Return : Alias<2, (outs), (ins), [(z_retflag)]>;
+let Predicates = [IsTargetXPLINK64] in {
+  // A return instruction (b 2(%r7)).
+  let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1 in
+    def Return_XPLINK : Alias<4, (outs), (ins), [(z_retflag)]>;
 
-// A conditional return instruction (bcr <cond>, %r14).
-let isReturn = 1, isTerminator = 1, hasCtrlDep = 1, CCMaskFirst = 1, Uses = [CC] in
-  def CondReturn : Alias<2, (outs), (ins cond4:$valid, cond4:$R1), []>;
+  // A conditional return instruction (bc <cond>, 2(%r7)).
+  let isReturn = 1, isTerminator = 1, hasCtrlDep = 1, CCMaskFirst = 1, Uses = [CC] in
+    def CondReturn_XPLINK : Alias<4, (outs), (ins cond4:$valid, cond4:$R1), []>;
+}
+
+let Predicates = [IsTargetELF] in {
+  // A return instruction (br %r14).
+  let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1 in
+    def Return : Alias<2, (outs), (ins), [(z_retflag)]>;
+
+  // A conditional return instruction (bcr <cond>, %r14).
+  let isReturn = 1, isTerminator = 1, hasCtrlDep = 1, CCMaskFirst = 1, Uses = [CC] in
+    def CondReturn : Alias<2, (outs), (ins cond4:$valid, cond4:$R1), []>;
+}
 
 // Fused compare and conditional returns.
 let isReturn = 1, isTerminator = 1, hasCtrlDep = 1 in {
@@ -509,6 +521,12 @@ let mayLoad = 1, mayStore = 1, Defs = [CC] in {
   def MVCLE : SideEffectTernaryMemMemRS<"mvcle", 0xA8, GR128, GR128>;
   def MVCLU : SideEffectTernaryMemMemRSY<"mvclu", 0xEB8E, GR128, GR128>;
 }
+
+// Memset[Length][Byte] pseudos.
+def MemsetImmImm : MemsetPseudo<imm64, imm32zx8trunc>;
+def MemsetImmReg : MemsetPseudo<imm64, GR32>;
+def MemsetRegImm : MemsetPseudo<ADDR64, imm32zx8trunc>;
+def MemsetRegReg : MemsetPseudo<ADDR64, GR32>;
 
 // Move right.
 let Predicates = [FeatureMiscellaneousExtensions3],
@@ -2173,7 +2191,7 @@ let hasSideEffects = 1 in {
   def EX   : SideEffectBinaryRX<"ex", 0x44, ADDR64>;
   def EXRL : SideEffectBinaryRILPC<"exrl", 0xC60, ADDR64>;
   let hasNoSchedulingInfo = 1 in
-    def EXRL_Pseudo : Pseudo<(outs), (ins i64imm:$TargetOpc, ADDR64:$lenMinus1,
+    def EXRL_Pseudo : Alias<6, (outs), (ins i64imm:$TargetOpc, ADDR64:$lenMinus1,
                                           bdaddr12only:$bdl1, bdaddr12only:$bd2),
                                           []>;
 }

@@ -18,6 +18,7 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/SubtargetFeature.h"
+#include "llvm/Support/RISCVISAInfo.h"
 
 namespace llvm {
 
@@ -82,6 +83,11 @@ enum {
   // explicit operand. Used by RVV Pseudos.
   HasVecPolicyOpShift = HasVLOpShift + 1,
   HasVecPolicyOpMask = 1 << HasVecPolicyOpShift,
+
+  // Is this instruction a vector widening reduction instruction. Used by RVV
+  // Pseudos.
+  IsRVVWideningReductionShift = HasVecPolicyOpShift + 1,
+  IsRVVWideningReductionMask = 1 << IsRVVWideningReductionShift,
 };
 
 // Match with the definitions in RISCVInstrFormatsV.td
@@ -146,6 +152,10 @@ static inline bool hasVLOp(uint64_t TSFlags) {
 static inline bool hasVecPolicyOp(uint64_t TSFlags) {
   return TSFlags & HasVecPolicyOpMask;
 }
+/// \returns true if it is a vector widening reduction instruction.
+static inline bool isRVVWideningReduction(uint64_t TSFlags) {
+  return TSFlags & IsRVVWideningReductionMask;
+}
 
 // RISC-V Specific Machine Operand Flags
 enum {
@@ -182,7 +192,8 @@ enum OperandType : unsigned {
   OPERAND_SIMM12,
   OPERAND_UIMM20,
   OPERAND_UIMMLOG2XLEN,
-  OPERAND_LAST_RISCV_IMM = OPERAND_UIMMLOG2XLEN,
+  OPERAND_RVKRNUM,
+  OPERAND_LAST_RISCV_IMM = OPERAND_RVKRNUM,
   // Operand is either a register or uimm5, this is used by V extension pseudo
   // instructions to represent a value that be passed as AVL to either vsetvli
   // or vsetivli.
@@ -290,6 +301,16 @@ struct SysReg {
 #include "RISCVGenSearchableTables.inc"
 } // end namespace RISCVSysReg
 
+namespace RISCVInsnOpcode {
+struct RISCVOpcode {
+  const char *Name;
+  unsigned Value;
+};
+
+#define GET_RISCVOpcodesList_DECL
+#include "RISCVGenSearchableTables.inc"
+} // end namespace RISCVInsnOpcode
+
 namespace RISCVABI {
 
 enum ABI {
@@ -324,9 +345,8 @@ namespace RISCVFeatures {
 // triple. Exits with report_fatal_error if not.
 void validate(const Triple &TT, const FeatureBitset &FeatureBits);
 
-// Convert FeatureBitset to FeatureVector.
-void toFeatureVector(std::vector<std::string> &FeatureVector,
-                     const FeatureBitset &FeatureBits);
+llvm::Expected<std::unique_ptr<RISCVISAInfo>>
+parseFeatureBits(bool IsRV64, const FeatureBitset &FeatureBits);
 
 } // namespace RISCVFeatures
 

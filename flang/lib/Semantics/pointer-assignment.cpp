@@ -172,7 +172,8 @@ bool PointerAssignmentChecker::Check(const evaluate::FunctionRef<T> &f) {
     const auto *frTypeAndShape{funcResult->GetTypeAndShape()};
     CHECK(frTypeAndShape);
     if (!lhsType_->IsCompatibleWith(context_.messages(), *frTypeAndShape,
-            "pointer", "function result", false /*elemental*/,
+            "pointer", "function result",
+            isBoundsRemapping_ /*omit shape check*/,
             evaluate::CheckConformanceFlags::BothDeferredShape)) {
       return false; // IsCompatibleWith() emitted message
     }
@@ -383,7 +384,7 @@ bool CheckPointerAssignment(evaluate::FoldingContext &context,
   if (!pointer) {
     return false; // error was reported
   }
-  if (!IsPointer(*pointer)) {
+  if (!IsPointer(pointer->GetUltimate())) {
     evaluate::SayWithDeclaration(context.messages(), *pointer,
         "'%s' is not a pointer"_err_en_US, pointer->name());
     return false;

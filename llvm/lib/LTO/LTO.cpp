@@ -46,6 +46,7 @@
 #include "llvm/Support/ThreadPool.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/TimeProfiler.h"
+#include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/VCSRevision.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -997,7 +998,7 @@ Error LTO::checkPartiallySplit() {
   return Error::success();
 }
 
-Error LTO::run(AddStreamFn AddStream, NativeObjectCache Cache) {
+Error LTO::run(AddStreamFn AddStream, FileCache Cache) {
   // Compute "dead" symbols, we don't want to import/export these!
   DenseSet<GlobalValue::GUID> GUIDPreservedSymbols;
   DenseMap<GlobalValue::GUID, PrevailingType> GUIDPrevailingResolutions;
@@ -1106,7 +1107,7 @@ Error LTO::runRegularLTO(AddStreamFn AddStream) {
 
   if (Conf.PreOptModuleHook &&
       !Conf.PreOptModuleHook(0, *RegularLTO.CombinedModule))
-    return Error::success();
+    return finalizeOptimizationRemarks(std::move(DiagnosticOutputFile));
 
   if (!Conf.CodeGenOnly) {
     for (const auto &R : GlobalResolutions) {
@@ -1132,7 +1133,7 @@ Error LTO::runRegularLTO(AddStreamFn AddStream) {
 
     if (Conf.PostInternalizeModuleHook &&
         !Conf.PostInternalizeModuleHook(0, *RegularLTO.CombinedModule))
-      return Error::success();
+      return finalizeOptimizationRemarks(std::move(DiagnosticOutputFile));
   }
 
   if (!RegularLTO.EmptyCombinedModule || Conf.AlwaysEmitRegularLTOObj) {
@@ -1168,7 +1169,7 @@ public:
       : Conf(Conf), CombinedIndex(CombinedIndex),
         ModuleToDefinedGVSummaries(ModuleToDefinedGVSummaries) {}
 
-  virtual ~ThinBackendProc() {}
+  virtual ~ThinBackendProc() = default;
   virtual Error start(
       unsigned Task, BitcodeModule BM,
       const FunctionImporter::ImportMapTy &ImportList,
@@ -1183,7 +1184,7 @@ namespace {
 class InProcessThinBackend : public ThinBackendProc {
   ThreadPool BackendThreadPool;
   AddStreamFn AddStream;
-  NativeObjectCache Cache;
+  FileCache Cache;
   std::set<GlobalValue::GUID> CfiFunctionDefs;
   std::set<GlobalValue::GUID> CfiFunctionDecls;
 
@@ -1195,7 +1196,7 @@ public:
       const Config &Conf, ModuleSummaryIndex &CombinedIndex,
       ThreadPoolStrategy ThinLTOParallelism,
       const StringMap<GVSummaryMapTy> &ModuleToDefinedGVSummaries,
-      AddStreamFn AddStream, NativeObjectCache Cache)
+      AddStreamFn AddStream, FileCache Cache)
       : ThinBackendProc(Conf, CombinedIndex, ModuleToDefinedGVSummaries),
         BackendThreadPool(ThinLTOParallelism), AddStream(std::move(AddStream)),
         Cache(std::move(Cache)) {
@@ -1208,8 +1209,8 @@ public:
   }
 
   Error runThinLTOBackendThread(
-      AddStreamFn AddStream, NativeObjectCache Cache, unsigned Task,
-      BitcodeModule BM, ModuleSummaryIndex &CombinedIndex,
+      AddStreamFn AddStream, FileCache Cache, unsigned Task, BitcodeModule BM,
+      ModuleSummaryIndex &CombinedIndex,
       const FunctionImporter::ImportMapTy &ImportList,
       const FunctionImporter::ExportSetTy &ExportList,
       const std::map<GlobalValue::GUID, GlobalValue::LinkageTypes> &ResolvedODR,
@@ -1239,7 +1240,11 @@ public:
     computeLTOCacheKey(Key, Conf, CombinedIndex, ModuleID, ImportList,
                        ExportList, ResolvedODR, DefinedGlobals, CfiFunctionDefs,
                        CfiFunctionDecls);
-    if (AddStreamFn CacheAddStream = Cache(Task, Key))
+    Expected<AddStreamFn> CacheAddStreamOrErr = Cache(Task, Key);
+    if (Error Err = CacheAddStreamOrErr.takeError())
+      return Err;
+    AddStreamFn &CacheAddStream = *CacheAddStreamOrErr;
+    if (CacheAddStream)
       return RunThinBackend(CacheAddStream);
 
     return Error::success();
@@ -1301,7 +1306,7 @@ public:
 ThinBackend lto::createInProcessThinBackend(ThreadPoolStrategy Parallelism) {
   return [=](const Config &Conf, ModuleSummaryIndex &CombinedIndex,
              const StringMap<GVSummaryMapTy> &ModuleToDefinedGVSummaries,
-             AddStreamFn AddStream, NativeObjectCache Cache) {
+             AddStreamFn AddStream, FileCache Cache) {
     return std::make_unique<InProcessThinBackend>(
         Conf, CombinedIndex, Parallelism, ModuleToDefinedGVSummaries, AddStream,
         Cache);
@@ -1368,7 +1373,7 @@ public:
                       sys::fs::OpenFlags::OF_None);
     if (EC)
       return errorCodeToError(EC);
-    WriteIndexToFile(CombinedIndex, OS, &ModuleToSummariesForIndex);
+    writeIndexToFile(CombinedIndex, OS, &ModuleToSummariesForIndex);
 
     if (ShouldEmitImportsFiles) {
       EC = EmitImportsFiles(ModulePath, NewModulePath + ".imports",
@@ -1395,14 +1400,14 @@ ThinBackend lto::createWriteIndexesThinBackend(
     raw_fd_ostream *LinkedObjectsFile, IndexWriteCallback OnWrite) {
   return [=](const Config &Conf, ModuleSummaryIndex &CombinedIndex,
              const StringMap<GVSummaryMapTy> &ModuleToDefinedGVSummaries,
-             AddStreamFn AddStream, NativeObjectCache Cache) {
+             AddStreamFn AddStream, FileCache Cache) {
     return std::make_unique<WriteIndexesThinBackend>(
         Conf, CombinedIndex, ModuleToDefinedGVSummaries, OldPrefix, NewPrefix,
         ShouldEmitImportsFiles, LinkedObjectsFile, OnWrite);
   };
 }
 
-Error LTO::runThinLTO(AddStreamFn AddStream, NativeObjectCache Cache,
+Error LTO::runThinLTO(AddStreamFn AddStream, FileCache Cache,
                       const DenseSet<GlobalValue::GUID> &GUIDPreservedSymbols) {
   timeTraceProfilerBegin("ThinLink", StringRef(""));
   auto TimeTraceScopeExit = llvm::make_scope_exit([]() {
@@ -1616,9 +1621,8 @@ lto::setupStatsFile(StringRef StatsFilename) {
 // is to sort them per size so that the largest module get schedule as soon as
 // possible. This is purely a compile-time optimization.
 std::vector<int> lto::generateModulesOrdering(ArrayRef<BitcodeModule *> R) {
-  std::vector<int> ModulesOrdering;
-  ModulesOrdering.resize(R.size());
-  std::iota(ModulesOrdering.begin(), ModulesOrdering.end(), 0);
+  auto Seq = llvm::seq<int>(0, R.size());
+  std::vector<int> ModulesOrdering(Seq.begin(), Seq.end());
   llvm::sort(ModulesOrdering, [&](int LeftIndex, int RightIndex) {
     auto LSize = R[LeftIndex]->getBuffer().size();
     auto RSize = R[RightIndex]->getBuffer().size();

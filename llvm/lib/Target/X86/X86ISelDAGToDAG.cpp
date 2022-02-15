@@ -80,9 +80,9 @@ namespace {
     bool NegateIndex = false;
 
     X86ISelAddressMode()
-        : BaseType(RegBase), Base_FrameIndex(0), Scale(1), IndexReg(), Disp(0),
-          Segment(), GV(nullptr), CP(nullptr), BlockAddr(nullptr), ES(nullptr),
-          MCSym(nullptr), JT(-1), SymbolFlags(X86II::MO_NO_FLAG) {}
+        : BaseType(RegBase), Base_FrameIndex(0), Scale(1), Disp(0), GV(nullptr),
+          CP(nullptr), BlockAddr(nullptr), ES(nullptr), MCSym(nullptr), JT(-1),
+          SymbolFlags(X86II::MO_NO_FLAG) {}
 
     bool hasSymbolicDisplacement() const {
       return GV != nullptr || CP != nullptr || ES != nullptr ||
@@ -216,6 +216,8 @@ namespace {
     bool matchAdd(SDValue &N, X86ISelAddressMode &AM, unsigned Depth);
     bool matchAddressRecursively(SDValue N, X86ISelAddressMode &AM,
                                  unsigned Depth);
+    bool matchVectorAddressRecursively(SDValue N, X86ISelAddressMode &AM,
+                                       unsigned Depth);
     bool matchAddressBase(SDValue N, X86ISelAddressMode &AM);
     bool selectAddr(SDNode *Parent, SDValue N, SDValue &Base,
                     SDValue &Scale, SDValue &Index, SDValue &Disp,
@@ -336,10 +338,9 @@ namespace {
         return false;
 
       // Walk all the users of the immediate.
-      for (SDNode::use_iterator UI = N->use_begin(),
-           UE = N->use_end(); (UI != UE) && (UseCount < 2); ++UI) {
-
-        SDNode *User = *UI;
+      for (const SDNode *User : N->uses()) {
+        if (UseCount >= 2)
+          break;
 
         // This user is already selected. Count it as a legitimate use and
         // move on.
@@ -431,6 +432,55 @@ namespace {
       uint64_t Index = N->getConstantOperandVal(2);
       MVT VecVT = N->getSimpleValueType(0);
       return getI8Imm((Index * VecVT.getScalarSizeInBits()) / VecWidth, DL);
+    }
+
+    SDValue getPermuteVINSERTCommutedImmediate(SDNode *N, unsigned VecWidth,
+                                               const SDLoc &DL) {
+      assert(VecWidth == 128 && "Unexpected vector width");
+      uint64_t Index = N->getConstantOperandVal(2);
+      MVT VecVT = N->getSimpleValueType(0);
+      uint64_t InsertIdx = (Index * VecVT.getScalarSizeInBits()) / VecWidth;
+      assert((InsertIdx == 0 || InsertIdx == 1) && "Bad insertf128 index");
+      // vinsert(0,sub,vec) -> [sub0][vec1] -> vperm2x128(0x30,vec,sub)
+      // vinsert(1,sub,vec) -> [vec0][sub0] -> vperm2x128(0x02,vec,sub)
+      return getI8Imm(InsertIdx ? 0x02 : 0x30, DL);
+    }
+
+    SDValue getSBBZero(SDNode *N) {
+      SDLoc dl(N);
+      MVT VT = N->getSimpleValueType(0);
+
+      // Create zero.
+      SDVTList VTs = CurDAG->getVTList(MVT::i32, MVT::i32);
+      SDValue Zero =
+          SDValue(CurDAG->getMachineNode(X86::MOV32r0, dl, VTs, None), 0);
+      if (VT == MVT::i64) {
+        Zero = SDValue(
+            CurDAG->getMachineNode(
+                TargetOpcode::SUBREG_TO_REG, dl, MVT::i64,
+                CurDAG->getTargetConstant(0, dl, MVT::i64), Zero,
+                CurDAG->getTargetConstant(X86::sub_32bit, dl, MVT::i32)),
+            0);
+      }
+
+      // Copy flags to the EFLAGS register and glue it to next node.
+      unsigned Opcode = N->getOpcode();
+      assert((Opcode == X86ISD::SBB || Opcode == X86ISD::SETCC_CARRY) &&
+             "Unexpected opcode for SBB materialization");
+      unsigned FlagOpIndex = Opcode == X86ISD::SBB ? 2 : 1;
+      SDValue EFLAGS =
+          CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EFLAGS,
+                               N->getOperand(FlagOpIndex), SDValue());
+
+      // Create a 64-bit instruction if the result is 64-bits otherwise use the
+      // 32-bit version.
+      unsigned Opc = VT == MVT::i64 ? X86::SBB64rr : X86::SBB32rr;
+      MVT SBBVT = VT == MVT::i64 ? MVT::i64 : MVT::i32;
+      VTs = CurDAG->getVTList(SBBVT, MVT::i32);
+      return SDValue(
+          CurDAG->getMachineNode(Opc, dl, VTs,
+                                 {Zero, Zero, EFLAGS, EFLAGS.getValue(1)}),
+          0);
     }
 
     // Helper to detect unneeded and instructions on shift amounts. Called
@@ -878,16 +928,31 @@ void X86DAGToDAGISel::PreprocessISelDAG() {
       continue;
     }
 
-    /// Convert vector increment or decrement to sub/add with an all-ones
-    /// constant:
-    /// add X, <1, 1...> --> sub X, <-1, -1...>
-    /// sub X, <1, 1...> --> add X, <-1, -1...>
-    /// The all-ones vector constant can be materialized using a pcmpeq
-    /// instruction that is commonly recognized as an idiom (has no register
-    /// dependency), so that's better/smaller than loading a splat 1 constant.
+    // Convert vector increment or decrement to sub/add with an all-ones
+    // constant:
+    // add X, <1, 1...> --> sub X, <-1, -1...>
+    // sub X, <1, 1...> --> add X, <-1, -1...>
+    // The all-ones vector constant can be materialized using a pcmpeq
+    // instruction that is commonly recognized as an idiom (has no register
+    // dependency), so that's better/smaller than loading a splat 1 constant.
+    //
+    // But don't do this if it would inhibit a potentially profitable load
+    // folding opportunity for the other operand. That only occurs with the
+    // intersection of:
+    // (1) The other operand (op0) is load foldable.
+    // (2) The op is an add (otherwise, we are *creating* an add and can still
+    //     load fold the other op).
+    // (3) The target has AVX (otherwise, we have a destructive add and can't
+    //     load fold the other op without killing the constant op).
+    // (4) The constant 1 vector has multiple uses (so it is profitable to load
+    //     into a register anyway).
+    auto mayPreventLoadFold = [&]() {
+      return X86::mayFoldLoad(N->getOperand(0), *Subtarget) &&
+             N->getOpcode() == ISD::ADD && Subtarget->hasAVX() &&
+             !N->getOperand(1).hasOneUse();
+    };
     if ((N->getOpcode() == ISD::ADD || N->getOpcode() == ISD::SUB) &&
-        N->getSimpleValueType(0).isVector()) {
-
+        N->getSimpleValueType(0).isVector() && !mayPreventLoadFold()) {
       APInt SplatVal;
       if (X86::isConstantSplat(N->getOperand(1), SplatVal) &&
           SplatVal.isOne()) {
@@ -2468,10 +2533,18 @@ bool X86DAGToDAGISel::matchAddressBase(SDValue N, X86ISelAddressMode &AM) {
   return false;
 }
 
-/// Helper for selectVectorAddr. Handles things that can be folded into a
-/// gather scatter address. The index register and scale should have already
-/// been handled.
-bool X86DAGToDAGISel::matchVectorAddress(SDValue N, X86ISelAddressMode &AM) {
+bool X86DAGToDAGISel::matchVectorAddressRecursively(SDValue N,
+                                                    X86ISelAddressMode &AM,
+                                                    unsigned Depth) {
+  SDLoc dl(N);
+  LLVM_DEBUG({
+    dbgs() << "MatchVectorAddress: ";
+    AM.dump(CurDAG);
+  });
+  // Limit recursion.
+  if (Depth > 5)
+    return matchAddressBase(N, AM);
+
   // TODO: Support other operations.
   switch (N.getOpcode()) {
   case ISD::Constant: {
@@ -2484,9 +2557,39 @@ bool X86DAGToDAGISel::matchVectorAddress(SDValue N, X86ISelAddressMode &AM) {
     if (!matchWrapper(N, AM))
       return false;
     break;
+  case ISD::ADD: {
+    // Add an artificial use to this node so that we can keep track of
+    // it if it gets CSE'd with a different node.
+    HandleSDNode Handle(N);
+
+    X86ISelAddressMode Backup = AM;
+    if (!matchVectorAddressRecursively(N.getOperand(0), AM, Depth + 1) &&
+        !matchVectorAddressRecursively(Handle.getValue().getOperand(1), AM,
+                                       Depth + 1))
+      return false;
+    AM = Backup;
+
+    // Try again after commuting the operands.
+    if (!matchVectorAddressRecursively(Handle.getValue().getOperand(1), AM,
+                                       Depth + 1) &&
+        !matchVectorAddressRecursively(Handle.getValue().getOperand(0), AM,
+                                       Depth + 1))
+      return false;
+    AM = Backup;
+
+    N = Handle.getValue();
+    break;
+  }
   }
 
   return matchAddressBase(N, AM);
+}
+
+/// Helper for selectVectorAddr. Handles things that can be folded into a
+/// gather/scatter address. The index register and scale should have already
+/// been handled.
+bool X86DAGToDAGISel::matchVectorAddress(SDValue N, X86ISelAddressMode &AM) {
+  return matchVectorAddressRecursively(N, AM, 0);
 }
 
 bool X86DAGToDAGISel::selectVectorAddr(MemSDNode *Parent, SDValue BasePtr,
@@ -2693,10 +2796,9 @@ bool X86DAGToDAGISel::selectLEAAddr(SDValue N,
         return false;
       }
     };
-    // TODO: This could be an 'or' rather than 'and' to make the transform more
-    //       likely to happen. We might want to factor in whether there's a
-    //       load folding opportunity for the math op that disappears with LEA.
-    if (isMathWithFlags(N.getOperand(0)) && isMathWithFlags(N.getOperand(1)))
+    // TODO: We might want to factor in whether there's a load folding
+    // opportunity for the math op that disappears with LEA.
+    if (isMathWithFlags(N.getOperand(0)) || isMathWithFlags(N.getOperand(1)))
       Complexity++;
   }
 
@@ -5703,21 +5805,28 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     break;
 
   case X86ISD::SETCC_CARRY: {
-    // We have to do this manually because tblgen will put the eflags copy in
-    // the wrong place if we use an extract_subreg in the pattern.
     MVT VT = Node->getSimpleValueType(0);
+    SDValue Result;
+    if (Subtarget->hasSBBDepBreaking()) {
+      // We have to do this manually because tblgen will put the eflags copy in
+      // the wrong place if we use an extract_subreg in the pattern.
+      // Copy flags to the EFLAGS register and glue it to next node.
+      SDValue EFLAGS =
+          CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EFLAGS,
+                               Node->getOperand(1), SDValue());
 
-    // Copy flags to the EFLAGS register and glue it to next node.
-    SDValue EFLAGS =
-        CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EFLAGS,
-                             Node->getOperand(1), SDValue());
-
-    // Create a 64-bit instruction if the result is 64-bits otherwise use the
-    // 32-bit version.
-    unsigned Opc = VT == MVT::i64 ? X86::SETB_C64r : X86::SETB_C32r;
-    MVT SetVT = VT == MVT::i64 ? MVT::i64 : MVT::i32;
-    SDValue Result = SDValue(
-        CurDAG->getMachineNode(Opc, dl, SetVT, EFLAGS, EFLAGS.getValue(1)), 0);
+      // Create a 64-bit instruction if the result is 64-bits otherwise use the
+      // 32-bit version.
+      unsigned Opc = VT == MVT::i64 ? X86::SETB_C64r : X86::SETB_C32r;
+      MVT SetVT = VT == MVT::i64 ? MVT::i64 : MVT::i32;
+      Result = SDValue(
+          CurDAG->getMachineNode(Opc, dl, SetVT, EFLAGS, EFLAGS.getValue(1)),
+          0);
+    } else {
+      // The target does not recognize sbb with the same reg operand as a
+      // no-source idiom, so we explicitly zero the input values.
+      Result = getSBBZero(Node);
+    }
 
     // For less than 32-bits we need to extract from the 32-bit node.
     if (VT == MVT::i8 || VT == MVT::i16) {
@@ -5732,35 +5841,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
   case X86ISD::SBB: {
     if (isNullConstant(Node->getOperand(0)) &&
         isNullConstant(Node->getOperand(1))) {
-      MVT VT = Node->getSimpleValueType(0);
-
-      // Create zero.
-      SDVTList VTs = CurDAG->getVTList(MVT::i32, MVT::i32);
-      SDValue Zero =
-          SDValue(CurDAG->getMachineNode(X86::MOV32r0, dl, VTs, None), 0);
-      if (VT == MVT::i64) {
-        Zero = SDValue(
-            CurDAG->getMachineNode(
-                TargetOpcode::SUBREG_TO_REG, dl, MVT::i64,
-                CurDAG->getTargetConstant(0, dl, MVT::i64), Zero,
-                CurDAG->getTargetConstant(X86::sub_32bit, dl, MVT::i32)),
-            0);
-      }
-
-      // Copy flags to the EFLAGS register and glue it to next node.
-      SDValue EFLAGS =
-          CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EFLAGS,
-                               Node->getOperand(2), SDValue());
-
-      // Create a 64-bit instruction if the result is 64-bits otherwise use the
-      // 32-bit version.
-      unsigned Opc = VT == MVT::i64 ? X86::SBB64rr : X86::SBB32rr;
-      MVT SBBVT = VT == MVT::i64 ? MVT::i64 : MVT::i32;
-      VTs = CurDAG->getVTList(SBBVT, MVT::i32);
-      SDValue Result =
-          SDValue(CurDAG->getMachineNode(Opc, dl, VTs, {Zero, Zero, EFLAGS,
-                                         EFLAGS.getValue(1)}),
-                  0);
+      SDValue Result = getSBBZero(Node);
 
       // Replace the flag use.
       ReplaceUses(SDValue(Node, 1), Result.getValue(1));
@@ -5768,6 +5849,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       // Replace the result use.
       if (!SDValue(Node, 0).use_empty()) {
         // For less than 32-bits we need to extract from the 32-bit node.
+        MVT VT = Node->getSimpleValueType(0);
         if (VT == MVT::i8 || VT == MVT::i16) {
           int SubIndex = VT == MVT::i16 ? X86::sub_16bit : X86::sub_8bit;
           Result = CurDAG->getTargetExtractSubreg(SubIndex, dl, VT, Result);

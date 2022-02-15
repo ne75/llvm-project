@@ -77,14 +77,15 @@ enum NodeType : unsigned {
   SBC, // adc, sbc instructions
 
   // Predicated instructions where inactive lanes produce undefined results.
-  ADD_PRED,
+  ABDS_PRED,
+  ABDU_PRED,
   FADD_PRED,
   FDIV_PRED,
   FMA_PRED,
-  FMAXNM_PRED,
-  FMINNM_PRED,
   FMAX_PRED,
+  FMAXNM_PRED,
   FMIN_PRED,
+  FMINNM_PRED,
   FMUL_PRED,
   FSUB_PRED,
   MUL_PRED,
@@ -96,13 +97,14 @@ enum NodeType : unsigned {
   SMIN_PRED,
   SRA_PRED,
   SRL_PRED,
-  SUB_PRED,
   UDIV_PRED,
   UMAX_PRED,
   UMIN_PRED,
 
   // Unpredicated vector instructions
   BIC,
+
+  SRAD_MERGE_OP1,
 
   // Predicated instructions with the result of inactive lanes provided by the
   // last operand.
@@ -228,15 +230,8 @@ enum NodeType : unsigned {
   SADDV,
   UADDV,
 
-  // Vector halving addition
-  SHADD,
-  UHADD,
-
-  // Vector rounding halving addition
-  SRHADD,
-  URHADD,
-
-  // Unsigned Add Long Pairwise
+  // Add Long Pairwise
+  SADDLP,
   UADDLP,
 
   // udot/sdot instructions
@@ -322,6 +317,8 @@ enum NodeType : unsigned {
 
   BITREVERSE_MERGE_PASSTHRU,
   BSWAP_MERGE_PASSTHRU,
+  REVH_MERGE_PASSTHRU,
+  REVW_MERGE_PASSTHRU,
   CTLZ_MERGE_PASSTHRU,
   CTPOP_MERGE_PASSTHRU,
   DUP_MERGE_PASSTHRU,
@@ -446,6 +443,12 @@ enum NodeType : unsigned {
   LDP,
   STP,
   STNP,
+
+  // Memory Operations
+  MOPS_MEMSET,
+  MOPS_MEMSET_TAGGING,
+  MOPS_MEMCOPY,
+  MOPS_MEMMOVE,
 };
 
 } // end namespace AArch64ISD
@@ -483,7 +486,6 @@ const unsigned RoundingBitsPos = 22;
 } // namespace AArch64
 
 class AArch64Subtarget;
-class AArch64TargetMachine;
 
 class AArch64TargetLowering : public TargetLowering {
 public:
@@ -743,7 +745,9 @@ public:
     if (!VT.isVector())
       return hasAndNotCompare(Y);
 
-    return VT.getSizeInBits() >= 64; // vector 'bic'
+    TypeSize TS = VT.getSizeInBits();
+    // TODO: We should be able to use bic/bif too for SVE.
+    return !TS.isScalable() && TS.getFixedValue() >= 64; // vector 'bic'
   }
 
   bool shouldProduceAndByConstByHoistingConstFromShiftsLHSOfAnd(
@@ -772,6 +776,8 @@ public:
 
   bool preferIncOfAddToSubOfNot(EVT VT) const override;
 
+  bool shouldConvertFpToSat(unsigned Op, EVT FPVT, EVT VT) const override;
+
   bool hasBitPreservingFPLogic(EVT VT) const override {
     // FIXME: Is this always true? It should be true for vectors at least.
     return VT == MVT::f32 || VT == MVT::f64;
@@ -799,13 +805,13 @@ public:
   /// Returns true if \p VecTy is a legal interleaved access type. This
   /// function checks the vector element type and the overall width of the
   /// vector.
-  bool isLegalInterleavedAccessType(VectorType *VecTy,
-                                    const DataLayout &DL) const;
+  bool isLegalInterleavedAccessType(VectorType *VecTy, const DataLayout &DL,
+                                    bool &UseScalable) const;
 
   /// Returns the number of interleaved accesses that will be generated when
   /// lowering accesses of the given type.
-  unsigned getNumInterleavedAccesses(VectorType *VecTy,
-                                     const DataLayout &DL) const;
+  unsigned getNumInterleavedAccesses(VectorType *VecTy, const DataLayout &DL,
+                                     bool UseScalable) const;
 
   MachineMemOperand::Flags getTargetMMOFlags(
     const Instruction &I) const override;
@@ -834,11 +840,13 @@ public:
     return 128;
   }
 
-  bool isAllActivePredicate(SDValue N) const;
+  bool isAllActivePredicate(SelectionDAG &DAG, SDValue N) const;
   EVT getPromotedVTForPredicate(EVT VT) const;
 
   EVT getAsmOperandValueType(const DataLayout &DL, Type *Ty,
                              bool AllowUnknown = false) const override;
+
+  bool shouldExpandGetActiveLaneMask(EVT VT, EVT OpVT) const override;
 
 private:
   /// Keep a pointer to the AArch64Subtarget around so that we can
@@ -878,6 +886,7 @@ private:
 
   SDValue LowerMLOAD(SDValue Op, SelectionDAG &DAG) const;
 
+  SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG) const;
 
   bool isEligibleForTailCallOptimization(
@@ -962,8 +971,8 @@ private:
   SDValue LowerVECTOR_SHUFFLE(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSPLAT_VECTOR(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerDUPQLane(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerToPredicatedOp(SDValue Op, SelectionDAG &DAG, unsigned NewOp,
-                              bool OverrideNEON = false) const;
+  SDValue LowerToPredicatedOp(SDValue Op, SelectionDAG &DAG,
+                              unsigned NewOp) const;
   SDValue LowerToScalableOp(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVECTOR_SPLICE(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerEXTRACT_SUBVECTOR(SDValue Op, SelectionDAG &DAG) const;
@@ -1127,8 +1136,8 @@ private:
   // with BITCAST used otherwise.
   SDValue getSVESafeBitCast(EVT VT, SDValue Op, SelectionDAG &DAG) const;
 
-  bool isConstantUnsignedBitfieldExtactLegal(unsigned Opc, LLT Ty1,
-                                             LLT Ty2) const override;
+  bool isConstantUnsignedBitfieldExtractLegal(unsigned Opc, LLT Ty1,
+                                              LLT Ty2) const override;
 };
 
 namespace AArch64 {

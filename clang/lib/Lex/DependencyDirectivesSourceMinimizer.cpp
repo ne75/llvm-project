@@ -270,6 +270,15 @@ static const char *findLastNonSpace(const char *First, const char *Last) {
   return Last;
 }
 
+static const char *findLastNonSpaceNonBackslash(const char *First,
+                                                const char *Last) {
+  assert(First <= Last);
+  while (First != Last &&
+         (isHorizontalWhitespace(Last[-1]) || Last[-1] == '\\'))
+    --Last;
+  return Last;
+}
+
 static const char *findFirstTrailingSpace(const char *First,
                                           const char *Last) {
   const char *LastNonSpace = findLastNonSpace(First, Last);
@@ -392,7 +401,7 @@ void Minimizer::printToNewline(const char *&First, const char *const End) {
     do {
       // Iterate over strings correctly to avoid comments and newlines.
       if (*Last == '"' || *Last == '\'' ||
-          (*Last == '<' && top() == pp_include)) {
+          (*Last == '<' && (top() == pp_include || top() == pp_import))) {
         if (LLVM_UNLIKELY(isRawStringLiteral(First, Last)))
           skipRawString(Last, End);
         else
@@ -434,11 +443,11 @@ void Minimizer::printToNewline(const char *&First, const char *const End) {
       return;
     }
 
-    // Print up to the backslash, backing up over spaces. Preserve at least one
-    // space, as the space matters when tokens are separated by a line
-    // continuation.
-    append(First, findFirstTrailingSpace(
-                      First, LastBeforeTrailingSpace - 1));
+    // Print up to the last character that's not a whitespace or backslash.
+    // Then print exactly one space, which matters when tokens are separated by
+    // a line continuation.
+    append(First, findLastNonSpaceNonBackslash(First, Last));
+    put(' ');
 
     First = Last;
     skipNewline(First, End);
@@ -734,6 +743,27 @@ bool Minimizer::lexPragma(const char *&First, const char *const End) {
     append("#pragma once\n");
     return false;
   }
+  if (FoundId.Name == "push_macro") {
+    // #pragma push_macro
+    makeToken(pp_pragma_push_macro);
+    append("#pragma push_macro");
+    printDirectiveBody(First, End);
+    return false;
+  }
+  if (FoundId.Name == "pop_macro") {
+    // #pragma pop_macro
+    makeToken(pp_pragma_pop_macro);
+    append("#pragma pop_macro");
+    printDirectiveBody(First, End);
+    return false;
+  }
+  if (FoundId.Name == "include_alias") {
+    // #pragma include_alias
+    makeToken(pp_pragma_include_alias);
+    append("#pragma include_alias");
+    printDirectiveBody(First, End);
+    return false;
+  }
 
   if (FoundId.Name != "clang") {
     skipLine(First, End);
@@ -835,6 +865,10 @@ bool Minimizer::lexPPLine(const char *&First, const char *const End) {
   // Figure out the token.
   IdInfo Id = lexIdentifier(First, End);
   First = Id.Last;
+
+  if (Id.Name == "pragma")
+    return lexPragma(First, End);
+
   auto Kind = llvm::StringSwitch<TokenKind>(Id.Name)
                   .Case("include", pp_include)
                   .Case("__include_macros", pp___include_macros)
@@ -850,7 +884,6 @@ bool Minimizer::lexPPLine(const char *&First, const char *const End) {
                   .Case("elifndef", pp_elifndef)
                   .Case("else", pp_else)
                   .Case("endif", pp_endif)
-                  .Case("pragma", pp_pragma_import)
                   .Default(pp_none);
   if (Kind == pp_none) {
     skipDirective(Id.Name, First, End);
@@ -862,9 +895,6 @@ bool Minimizer::lexPPLine(const char *&First, const char *const End) {
 
   if (Kind == pp_define)
     return lexDefine(First, End);
-
-  if (Kind == pp_pragma_import)
-    return lexPragma(First, End);
 
   // Everything else.
   return lexDefault(Kind, Id.Name, First, End);

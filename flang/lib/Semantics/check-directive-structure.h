@@ -66,8 +66,14 @@ public:
       switch ((llvm::omp::Directive)currentDirective_) {
       // exclude directives which do not need a check for unlabelled CYCLES
       case llvm::omp::Directive::OMPD_do:
-        return;
       case llvm::omp::Directive::OMPD_simd:
+      case llvm::omp::Directive::OMPD_parallel_do:
+      case llvm::omp::Directive::OMPD_parallel_do_simd:
+      case llvm::omp::Directive::OMPD_distribute_parallel_do:
+      case llvm::omp::Directive::OMPD_distribute_parallel_do_simd:
+      case llvm::omp::Directive::OMPD_distribute_parallel_for:
+      case llvm::omp::Directive::OMPD_distribute_simd:
+      case llvm::omp::Directive::OMPD_distribute_parallel_for_simd:
         return;
       default:
         break;
@@ -545,7 +551,7 @@ void DirectiveStructureChecker<D, C, PC,
     ClauseEnumSize>::RequiresPositiveParameter(const C &clause,
     const parser::ScalarIntExpr &i, llvm::StringRef paramName) {
   if (const auto v{GetIntValue(i)}) {
-    if (*v <= 0) {
+    if (*v < 0) {
       context_.Say(GetContext().clauseSource,
           "The %s of the %s clause must be "
           "a positive integer expression"_err_en_US,

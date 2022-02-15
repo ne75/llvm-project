@@ -2596,7 +2596,11 @@ enum CXCursorKind {
    */
   CXCursor_OMPMetaDirective = 294,
 
-  CXCursor_LastStmt = CXCursor_OMPMetaDirective,
+  /** OpenMP loop directive.
+   */
+  CXCursor_OMPGenericLoopDirective = 295,
+
+  CXCursor_LastStmt = CXCursor_OMPGenericLoopDirective,
 
   /**
    * Cursor that represents the translation unit itself.
@@ -3896,7 +3900,7 @@ enum CXTypeNullabilityKind {
   /**
    * Generally behaves like Nullable, except when used in a block parameter that
    * was imported into a swift async method. There, swift will assume that the
-   * parameter can get null even if no error occured. _Nullable parameters are
+   * parameter can get null even if no error occurred. _Nullable parameters are
    * assumed to only get null on error.
    */
   CXTypeNullability_NullableResult = 4

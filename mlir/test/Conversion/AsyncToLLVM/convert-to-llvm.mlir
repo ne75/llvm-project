@@ -27,7 +27,7 @@ func @execute_no_async_args(%arg0: f32, %arg1: memref<1xf32>) {
   // CHECK: %[[IS_ERROR:.*]] = call @mlirAsyncRuntimeIsTokenError(%[[TOKEN]])
   // CHECK: %[[TRUE:.*]] = arith.constant true
   // CHECK: %[[NOT_ERROR:.*]] = arith.xori %[[IS_ERROR]], %[[TRUE]] : i1
-  // CHECK: assert %[[NOT_ERROR]]
+  // CHECK: cf.assert %[[NOT_ERROR]]
   // CHECK-NEXT: return
   async.await %token : !async.token
   return
@@ -49,7 +49,7 @@ func @execute_no_async_args(%arg0: f32, %arg1: memref<1xf32>) {
 
 // Decide the next block based on the code returned from suspend.
 // CHECK: %[[SEXT:.*]] = llvm.sext %[[SUSPENDED]] : i8 to i32
-// CHECK: llvm.switch %[[SEXT]], ^[[SUSPEND:[b0-9]+]]
+// CHECK: llvm.switch %[[SEXT]] : i32, ^[[SUSPEND:[b0-9]+]]
 // CHECK-NEXT: 0: ^[[RESUME:[b0-9]+]]
 // CHECK-NEXT: 1: ^[[CLEANUP:[b0-9]+]]
 
@@ -90,7 +90,7 @@ func @nested_async_execute(%arg0: f32, %arg1: f32, %arg2: memref<1xf32>) {
   // CHECK: %[[IS_ERROR:.*]] = call @mlirAsyncRuntimeIsTokenError(%[[TOKEN]])
   // CHECK: %[[TRUE:.*]] = arith.constant true
   // CHECK: %[[NOT_ERROR:.*]] = arith.xori %[[IS_ERROR]], %[[TRUE]] : i1
-  // CHECK: assert %[[NOT_ERROR]]
+  // CHECK: cf.assert %[[NOT_ERROR]]
   async.await %token0 : !async.token
   return
 }

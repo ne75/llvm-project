@@ -56,9 +56,9 @@ func @affine_load_invalid_dim(%M : memref<10xi32>) {
   ^bb0(%arg: index):
     affine.load %M[%arg] : memref<10xi32>
     // expected-error@-1 {{index must be a dimension or symbol identifier}}
-    br ^bb1
+    cf.br ^bb1
   ^bb1:
-    br ^bb1
+    cf.br ^bb1
   }) : () -> ()
   return
 }
@@ -137,6 +137,15 @@ func @affine_store_missing_l_square(%C: memref<4096x4096xf32>) {
   %9 = arith.constant 0.0 : f32
   // expected-error@+1 {{expected '['}}
   affine.store %9, %C : memref<4096x4096xf32>
+  return
+}
+
+// -----
+
+func @affine_store_wrong_value_type(%C: memref<f32>) {
+  %c0 = arith.constant 0 : i32
+  // expected-error@+1 {{value to store must have the same type as memref element type}}
+  "affine.store"(%c0, %C) : (i32, memref<f32>) -> ()
   return
 }
 

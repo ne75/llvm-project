@@ -498,7 +498,8 @@ static bool shouldPinPassToLegacyPM(StringRef Pass) {
       "generic-to-nvvm",      "expandmemcmp",
       "loop-reduce",          "lower-amx-type",
       "pre-amx-config",       "lower-amx-intrinsics",
-      "polyhedral-info",      "replace-with-veclib"};
+      "polyhedral-info",      "replace-with-veclib",
+      "jmc-instrument"};
   for (const auto &P : PassNamePrefix)
     if (Pass.startswith(P))
       return true;
@@ -572,6 +573,7 @@ int main(int argc, char **argv) {
   initializeHardwareLoopsPass(Registry);
   initializeTypePromotionPass(Registry);
   initializeReplaceWithVeclibLegacyPass(Registry);
+  initializeJMCInstrumenterPass(Registry);
 
 #ifdef BUILD_EXAMPLES
   initializeExampleIRTransforms(Registry);
@@ -772,19 +774,32 @@ int main(int argc, char **argv) {
           << "Cannot specify passes via both -foo-pass and --passes=foo-pass\n";
       return 1;
     }
+    auto NumOLevel = OptLevelO0 + OptLevelO1 + OptLevelO2 + OptLevelO3 +
+                     OptLevelOs + OptLevelOz;
+    if (NumOLevel > 1) {
+      errs() << "Cannot specify multiple -O#\n";
+      return 1;
+    }
+    if (NumOLevel > 0 && PassPipeline.getNumOccurrences() > 0) {
+      errs() << "Cannot specify -O# and --passes=, use "
+                "-passes='default<O#>,other-pass'\n";
+      return 1;
+    }
+    std::string Pipeline = PassPipeline;
+
     SmallVector<StringRef, 4> Passes;
     if (OptLevelO0)
-      Passes.push_back("default<O0>");
+      Pipeline = "default<O0>";
     if (OptLevelO1)
-      Passes.push_back("default<O1>");
+      Pipeline = "default<O1>";
     if (OptLevelO2)
-      Passes.push_back("default<O2>");
+      Pipeline = "default<O2>";
     if (OptLevelO3)
-      Passes.push_back("default<O3>");
+      Pipeline = "default<O3>";
     if (OptLevelOs)
-      Passes.push_back("default<Os>");
+      Pipeline = "default<Os>";
     if (OptLevelOz)
-      Passes.push_back("default<Oz>");
+      Pipeline = "default<Oz>";
     for (const auto &P : PassList)
       Passes.push_back(P->getPassArgument());
     OutputKind OK = OK_NoOutput;
@@ -803,7 +818,7 @@ int main(int argc, char **argv) {
     // string. Hand off the rest of the functionality to the new code for that
     // layer.
     return runPassPipeline(argv[0], *M, TM.get(), &TLII, Out.get(),
-                           ThinLinkOut.get(), RemarksFile.get(), PassPipeline,
+                           ThinLinkOut.get(), RemarksFile.get(), Pipeline,
                            Passes, OK, VK, PreserveAssemblyUseListOrder,
                            PreserveBitcodeUseListOrder, EmitSummaryIndex,
                            EmitModuleHash, EnableDebugify)

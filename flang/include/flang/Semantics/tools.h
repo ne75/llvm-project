@@ -96,7 +96,8 @@ bool IsPointerDummy(const Symbol &);
 bool IsBindCProcedure(const Symbol &);
 bool IsBindCProcedure(const Scope &);
 bool IsProcName(const Symbol &); // proc-name
-bool IsFunctionResultWithSameNameAsFunction(const Symbol &);
+// Returns a pointer to the function's symbol when true, else null
+const Symbol *IsFunctionResultWithSameNameAsFunction(const Symbol &);
 bool IsOrContainsEventOrLockComponent(const Symbol &);
 bool CanBeTypeBoundProc(const Symbol *);
 // Does a non-PARAMETER symbol have explicit initialization with =value or
@@ -106,12 +107,12 @@ bool CanBeTypeBoundProc(const Symbol *);
 // attribute, or a derived type component default value.)
 bool HasDeclarationInitializer(const Symbol &);
 // Is the symbol explicitly or implicitly initialized in any way?
-bool IsInitialized(const Symbol &, bool ignoreDATAstatements = false);
+bool IsInitialized(const Symbol &, bool ignoreDATAstatements = false,
+    bool ignoreAllocatable = false);
 // Is the symbol a component subject to deallocation or finalization?
 bool IsDestructible(const Symbol &, const Symbol *derivedType = nullptr);
 bool HasIntrinsicTypeName(const Symbol &);
 bool IsSeparateModuleProcedureInterface(const Symbol *);
-bool IsAutomatic(const Symbol &);
 bool HasAlternateReturns(const Symbol &);
 bool InCommonBlock(const Symbol &);
 
@@ -165,9 +166,7 @@ bool IsFinalizable(
 bool IsFinalizable(
     const DerivedTypeSpec &, std::set<const DerivedTypeSpec *> * = nullptr);
 bool HasImpureFinal(const DerivedTypeSpec &);
-bool IsCoarray(const Symbol &);
 bool IsInBlankCommon(const Symbol &);
-bool IsAutomaticObject(const Symbol &);
 inline bool IsAssumedSizeArray(const Symbol &symbol) {
   const auto *details{symbol.detailsIf<ObjectEntityDetails>()};
   return details && details->IsAssumedSize();

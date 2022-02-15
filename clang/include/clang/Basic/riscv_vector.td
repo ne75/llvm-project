@@ -191,9 +191,6 @@ class RVVBuiltin<string suffix, string prototype, string type_range,
   // All masked operations support overloading api.
   bit HasNoMaskedOverloaded = true;
 
-  // Reads or writes "memory" or has other side-effects.
-  bit HasSideEffects = false;
-
   // This builtin is valid for the given Log2LMULs.
   list<int> Log2LMUL = [0, 1, 2, 3, -1, -2, -3];
 
@@ -218,10 +215,10 @@ class RVVBuiltin<string suffix, string prototype, string type_range,
   // an automatic definition in header is emitted.
   string HeaderCode = "";
 
-  // Sub extension of vector spec. Currently only support Zvamo or Zvlsseg.
-  string RequiredExtension = "";
+  // Features required to enable for this builtin.
+  list<string> RequiredFeatures = [];
 
-  // Number of fields for Zvlsseg.
+  // Number of fields for Load/Store Segment instructions.
   int NF = 1;
 }
 
@@ -598,6 +595,7 @@ let HasNoMaskedOverloaded = false,
     ManualCodegen = [{
       IntrinsicTypes = {ResultType, Ops[1]->getType()};
       Ops[0] = Builder.CreateBitCast(Ops[0], ResultType->getPointerTo());
+      Ops.insert(Ops.begin(), llvm::UndefValue::get(ResultType));
     }],
     ManualCodegenMask= [{
       // Move mask to right before vl.
@@ -631,6 +629,7 @@ multiclass RVVVLEFFBuiltin<list<string> types> {
         Ops[0] = Builder.CreateBitCast(Ops[0], ResultType->getPointerTo());
         Value *NewVL = Ops[1];
         Ops.erase(Ops.begin() + 1);
+        Ops.insert(Ops.begin(), llvm::UndefValue::get(ResultType));
         llvm::Function *F = CGM.getIntrinsic(ID, IntrinsicTypes);
         llvm::Value *LoadValue = Builder.CreateCall(F, Ops, "");
         llvm::Value *V = Builder.CreateExtractValue(LoadValue, {0});
@@ -680,6 +679,7 @@ multiclass RVVVLSEBuiltin<list<string> types> {
       ManualCodegen = [{
         IntrinsicTypes = {ResultType, Ops[2]->getType()};
         Ops[0] = Builder.CreateBitCast(Ops[0], ResultType->getPointerTo());
+        Ops.insert(Ops.begin(), llvm::UndefValue::get(ResultType));
       }],
       ManualCodegenMask= [{
         // Move mask to right before vl.
@@ -701,6 +701,7 @@ multiclass RVVIndexedLoad<string op> {
   let ManualCodegen = [{
         IntrinsicTypes = {ResultType, Ops[1]->getType(), Ops[2]->getType()};
         Ops[0] = Builder.CreateBitCast(Ops[0], ResultType->getPointerTo());
+        Ops.insert(Ops.begin(), llvm::UndefValue::get(ResultType));
       }],
       ManualCodegenMask = [{
         // Move mask to right before vl.
@@ -710,7 +711,7 @@ multiclass RVVIndexedLoad<string op> {
         Ops[1] = Builder.CreateBitCast(Ops[1], ResultType->getPointerTo());
       }] in {
       foreach type = TypeList in {
-        foreach eew_list = EEWList in {
+        foreach eew_list = EEWList[0-2] in {
           defvar eew = eew_list[0];
           defvar eew_type = eew_list[1];
           let Name = op # eew # "_v", IRName = op, IRNameMask = op # "_mask" in {
@@ -720,6 +721,15 @@ multiclass RVVIndexedLoad<string op> {
               }
           }
         }
+        defvar eew64 = "64";
+        defvar eew64_type = "(Log2EEW:6)";
+        let Name = op # eew64 # "_v", IRName = op, IRNameMask = op # "_mask",
+            RequiredFeatures = ["RV64"] in {
+            def: RVVBuiltin<"v", "vPCe" # eew64_type # "Uv", type>;
+              if !not(IsFloat<type>.val) then {
+                def: RVVBuiltin<"Uv", "UvPCUe" # eew64_type # "Uv", type>;
+              }
+          }
       }
   }
 }
@@ -800,7 +810,7 @@ multiclass RVVIndexedStore<string op> {
         IntrinsicTypes = {Ops[0]->getType(), Ops[2]->getType(), Ops[4]->getType()};
       }] in {
       foreach type = TypeList in {
-        foreach eew_list = EEWList in {
+        foreach eew_list = EEWList[0-2] in {
           defvar eew = eew_list[0];
           defvar eew_type = eew_list[1];
           let Name = op # eew  # "_v", IRName = op, IRNameMask = op # "_mask" in  {
@@ -808,6 +818,15 @@ multiclass RVVIndexedStore<string op> {
             if !not(IsFloat<type>.val) then {
               def : RVVBuiltin<"Uv", "0PUe" # eew_type # "UvUv", type>;
             }
+          }
+        }
+        defvar eew64 = "64";
+        defvar eew64_type = "(Log2EEW:6)";
+        let Name = op # eew64  # "_v", IRName = op, IRNameMask = op # "_mask",
+            RequiredFeatures = ["RV64"]  in  {
+          def : RVVBuiltin<"v", "0Pe" # eew64_type # "Uvv", type>;
+          if !not(IsFloat<type>.val) then {
+            def : RVVBuiltin<"Uv", "0PUe" # eew64_type # "UvUv", type>;
           }
         }
       }
@@ -1260,36 +1279,6 @@ multiclass RVVIndexedSegStore<string op> {
   }
 }
 
-multiclass RVVAMOBuiltinSet<bit has_signed = false, bit has_unsigned = false,
-                            bit has_fp = false> {
-  defvar type_list = !if(has_fp, ["i","l","f","d"], ["i","l"]);
-  foreach type = type_list in
-    foreach eew_list = EEWList in {
-      defvar eew = eew_list[0];
-      defvar eew_index = eew_list[1];
-      let Name = NAME # "ei" # eew # "_" # "v",
-          IRName = NAME,
-          IRNameMask = NAME # "_mask",
-          HasMaskedOffOperand = false,
-          HasPolicy = false,
-          ManualCodegen = [{
-            // base, bindex, value, vl
-            IntrinsicTypes = {ResultType, Ops[1]->getType(), Ops[3]->getType()};
-            Ops[0] = Builder.CreateBitCast(Ops[0], ResultType->getPointerTo());
-          }],
-          ManualCodegenMask = [{
-            std::rotate(Ops.begin(), Ops.begin() + 1, Ops.end() - 1);
-            IntrinsicTypes = {ResultType, Ops[1]->getType(), Ops[4]->getType()};
-            Ops[0] = Builder.CreateBitCast(Ops[0], ResultType->getPointerTo());
-          }] in {
-        if has_signed then
-          def : RVVBuiltin<"v", "vPe" # eew_index # "Uvv", type>;
-        if !and(!not(IsFloat<type>.val), has_unsigned) then
-          def : RVVBuiltin<"Uv", "UvPUe" # eew_index # "UvUv", type>;
-      }
-    }
-}
-
 multiclass RVVPseudoUnaryBuiltin<string IR, string type_range> {
   let Name = NAME,
       IRName = IR,
@@ -1475,7 +1464,6 @@ multiclass RVVPseudoVNCVTBuiltin<string IR, string MName, string type_range,
 // 6.1. vsetvli/vsetvl instructions
 let HasVL = false,
     HasMask = false,
-    HasSideEffects = true,
     HasPolicy = false,
     Log2LMUL = [0],
     ManualCodegen = [{IntrinsicTypes = {ResultType};}] in // Set XLEN type
@@ -1583,7 +1571,6 @@ defm vle32ff: RVVVLEFFBuiltin<["i", "f"]>;
 defm vle64ff: RVVVLEFFBuiltin<["l", "d"]>;
 
 // 7.8 Vector Load/Store Segment Instructions
-let RequiredExtension = "Zvlsseg" in {
 defm : RVVUnitStridedSegLoad<"vlseg">;
 defm : RVVUnitStridedSegLoadFF<"vlseg">;
 defm : RVVStridedSegLoad<"vlsseg">;
@@ -1593,20 +1580,6 @@ defm : RVVUnitStridedSegStore<"vsseg">;
 defm : RVVStridedSegStore<"vssseg">;
 defm : RVVIndexedSegStore<"vsuxseg">;
 defm : RVVIndexedSegStore<"vsoxseg">;
-}
-
-// 8. Vector AMO Operations
-let RequiredExtension = "Zvamo" in {
-defm vamoswap : RVVAMOBuiltinSet< /* hasSigned */ true, /* hasUnsigned */ true, /* hasFP */ true>;
-defm vamoadd : RVVAMOBuiltinSet< /* hasSigned */ true, /* hasUnsigned */ true>;
-defm vamoxor : RVVAMOBuiltinSet< /* hasSigned */ true, /* hasUnsigned */ true>;
-defm vamoand : RVVAMOBuiltinSet< /* hasSigned */ true, /* hasUnsigned */ true>;
-defm vamoor : RVVAMOBuiltinSet< /* hasSigned */ true, /* hasUnsigned */ true>;
-defm vamomin : RVVAMOBuiltinSet< /* hasSigned */ true>;
-defm vamomax : RVVAMOBuiltinSet< /* hasSigned */ true>;
-defm vamominu : RVVAMOBuiltinSet< /* hasSigned */ false, /* hasUnsigned */ true>;
-defm vamomaxu : RVVAMOBuiltinSet< /* hasSigned */ false, /* hasUnsigned */ true>;
-}
 
 // 12. Vector Integer Arithmetic Instructions
 // 12.1. Vector Single-Width Integer Add and Subtract
@@ -1699,11 +1672,13 @@ defm vmax : RVVSignedBinBuiltinSet;
 
 // 12.10. Vector Single-Width Integer Multiply Instructions
 defm vmul : RVVIntBinBuiltinSet;
+let RequiredFeatures = ["FullMultiply"] in {
 defm vmulh : RVVSignedBinBuiltinSet;
 defm vmulhu : RVVUnsignedBinBuiltinSet;
 defm vmulhsu : RVVOutOp1BuiltinSet<"vmulhsu", "csil",
                                    [["vv", "v", "vvUv"],
                                     ["vx", "v", "vvUe"]]>;
+}
 
 // 12.11. Vector Integer Divide Instructions
 defm vdivu : RVVUnsignedBinBuiltinSet;
@@ -1725,7 +1700,6 @@ defm vwmulsu : RVVOutOp0Op1BuiltinSet<"vwmulsu", "csi",
 }
 
 // 12.13. Vector Single-Width Integer Multiply-Add Instructions
-let HasPolicy = false in {
 defm vmacc  : RVVIntTerBuiltinSet;
 defm vnmsac : RVVIntTerBuiltinSet;
 defm vmadd  : RVVIntTerBuiltinSet;
@@ -1745,7 +1719,6 @@ defm vwmaccsu : RVVOutOp1Op2BuiltinSet<"vwmaccsu", "csi",
                                         ["vx", "w", "wweUv"]]>;
 defm vwmaccus : RVVOutOp1Op2BuiltinSet<"vwmaccus", "csi",
                                        [["vx", "w", "wwUev"]]>;
-}
 }
 
 // 12.15. Vector Integer Merge Instructions
@@ -1790,7 +1763,9 @@ defm vasubu : RVVUnsignedBinBuiltinSet;
 defm vasub : RVVSignedBinBuiltinSet;
 
 // 13.3. Vector Single-Width Fractional Multiply with Rounding and Saturation
+let RequiredFeatures = ["FullMultiply"] in {
 defm vsmul : RVVSignedBinBuiltinSet;
+}
 
 // 13.4. Vector Single-Width Scaling Shift Instructions
 defm vssrl : RVVUnsignedShiftBuiltinSet;
@@ -1827,7 +1802,6 @@ let Log2LMUL = [-2, -1, 0, 1, 2] in {
 }
 
 // 14.6. Vector Single-Width Floating-Point Fused Multiply-Add Instructions
-let HasPolicy = false in {
 defm vfmacc  : RVVFloatingTerBuiltinSet;
 defm vfnmacc : RVVFloatingTerBuiltinSet;
 defm vfmsac  : RVVFloatingTerBuiltinSet;
@@ -1842,7 +1816,6 @@ defm vfwmacc  : RVVFloatingWidenTerBuiltinSet;
 defm vfwnmacc : RVVFloatingWidenTerBuiltinSet;
 defm vfwmsac  : RVVFloatingWidenTerBuiltinSet;
 defm vfwnmsac : RVVFloatingWidenTerBuiltinSet;
-}
 
 // 14.8. Vector Floating-Point Square-Root Instruction
 def vfsqrt : RVVFloatingUnaryVVBuiltin;
@@ -1885,7 +1858,7 @@ let HasMask = false, HasPolicy = false,
       std::rotate(Ops.begin(), Ops.begin() + 1, Ops.begin() + 3);
       IntrinsicTypes = {ResultType, Ops[1]->getType(), Ops[3]->getType()};
     }] in {
-  defm vmerge : RVVOutOp1BuiltinSet<"vfmerge", "xfd",
+  defm vmerge : RVVOutOp1BuiltinSet<"vmerge", "xfd",
                                     [["vvm", "v", "vmvv"]]>;
   defm vfmerge : RVVOutOp1BuiltinSet<"vfmerge", "xfd",
                                     [["vfm", "v", "vmve"]]>;
@@ -1963,11 +1936,11 @@ defm vfwredosum : RVVFloatingWidenReductionBuiltin;
 // 16.1. Vector Mask-Register Logical Instructions
 def vmand    : RVVMaskBinBuiltin;
 def vmnand   : RVVMaskBinBuiltin;
-def vmandnot : RVVMaskBinBuiltin;
+def vmandn   : RVVMaskBinBuiltin;
 def vmxor    : RVVMaskBinBuiltin;
 def vmor     : RVVMaskBinBuiltin;
 def vmnor    : RVVMaskBinBuiltin;
-def vmornot  : RVVMaskBinBuiltin;
+def vmorn    : RVVMaskBinBuiltin;
 def vmxnor   : RVVMaskBinBuiltin;
 // pseudoinstructions
 def vmclr    : RVVMaskNullaryBuiltin;
@@ -1976,8 +1949,8 @@ defm vmmv_m : RVVPseudoMaskBuiltin<"vmand", "c">;
 defm vmnot_m : RVVPseudoMaskBuiltin<"vmnand", "c">;
 
 let HasPolicy = false in {
-// 16.2. Vector mask population count vpopc
-def vpopc : RVVMaskOp0Builtin<"um">;
+// 16.2. Vector count population in mask vcpop.m
+def vcpop : RVVMaskOp0Builtin<"um">;
 
 // 16.3. vfirst find-first-set mask bit
 def vfirst : RVVMaskOp0Builtin<"lm">;
@@ -2026,12 +1999,10 @@ let HasMask = false, HasPolicy = false in {
 }
 
 // 17.3. Vector Slide Instructions
-let HasPolicy = false in {
 // 17.3.1. Vector Slideup Instructions
 defm vslideup   : RVVSlideBuiltinSet;
 // 17.3.2. Vector Slidedown Instructions
 defm vslidedown : RVVSlideBuiltinSet;
-}
 
 // 17.3.3. Vector Slide1up Instructions
 defm vslide1up : RVVSlideOneBuiltinSet;
@@ -2145,7 +2116,12 @@ let HasMask = false, HasVL = false, IRName = "" in {
       ManualCodegen = [{
       {
         ID = Intrinsic::experimental_vector_extract;
-        ScalableVectorType *VecTy = cast<ScalableVectorType>(ResultType);
+        auto *VecTy = cast<ScalableVectorType>(ResultType);
+        auto *OpVecTy = cast<ScalableVectorType>(Ops[0]->getType());
+        // Mask to only valid indices.
+        unsigned MaxIndex = OpVecTy->getMinNumElements() / VecTy->getMinNumElements();
+        assert(isPowerOf2_32(MaxIndex));
+        Ops[1] = Builder.CreateAnd(Ops[1], MaxIndex - 1);
         Ops[1] = Builder.CreateMul(Ops[1],
                                    ConstantInt::get(Ops[1]->getType(),
                                                     VecTy->getMinNumElements()));
@@ -2164,7 +2140,12 @@ let HasMask = false, HasVL = false, IRName = "" in {
       {
         ID = Intrinsic::experimental_vector_insert;
         IntrinsicTypes = {ResultType, Ops[2]->getType()};
-        ScalableVectorType *VecTy = cast<ScalableVectorType>(Ops[2]->getType());
+        auto *ResVecTy = cast<ScalableVectorType>(ResultType);
+        auto *VecTy = cast<ScalableVectorType>(Ops[2]->getType());
+        // Mask to only valid indices.
+        unsigned MaxIndex = ResVecTy->getMinNumElements() / VecTy->getMinNumElements();
+        assert(isPowerOf2_32(MaxIndex));
+        Ops[1] = Builder.CreateAnd(Ops[1], MaxIndex - 1);
         Ops[1] = Builder.CreateMul(Ops[1],
                                    ConstantInt::get(Ops[1]->getType(),
                                                     VecTy->getMinNumElements()));

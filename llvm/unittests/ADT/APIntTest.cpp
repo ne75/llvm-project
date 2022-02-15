@@ -1746,21 +1746,43 @@ TEST(APIntTest, isShiftedMask) {
   EXPECT_TRUE(APInt(32, 0xffff0000).isShiftedMask());
   EXPECT_TRUE(APInt(32, 0xff << 1).isShiftedMask());
 
+  unsigned MaskIdx, MaskLen;
+  EXPECT_FALSE(APInt(32, 0x01010101).isShiftedMask(MaskIdx, MaskLen));
+  EXPECT_TRUE(APInt(32, 0xf0000000).isShiftedMask(MaskIdx, MaskLen));
+  EXPECT_EQ(28, (int)MaskIdx);
+  EXPECT_EQ(4, (int)MaskLen);
+  EXPECT_TRUE(APInt(32, 0xffff0000).isShiftedMask(MaskIdx, MaskLen));
+  EXPECT_EQ(16, (int)MaskIdx);
+  EXPECT_EQ(16, (int)MaskLen);
+  EXPECT_TRUE(APInt(32, 0xff << 1).isShiftedMask(MaskIdx, MaskLen));
+  EXPECT_EQ(1, (int)MaskIdx);
+  EXPECT_EQ(8, (int)MaskLen);
+
   for (int N : { 1, 2, 3, 4, 7, 8, 16, 32, 64, 127, 128, 129, 256 }) {
     EXPECT_FALSE(APInt(N, 0).isShiftedMask());
+    EXPECT_FALSE(APInt(N, 0).isShiftedMask(MaskIdx, MaskLen));
 
     APInt One(N, 1);
     for (int I = 1; I < N; ++I) {
       APInt MaskVal = One.shl(I) - 1;
       EXPECT_TRUE(MaskVal.isShiftedMask());
+      EXPECT_TRUE(MaskVal.isShiftedMask(MaskIdx, MaskLen));
+      EXPECT_EQ(0, (int)MaskIdx);
+      EXPECT_EQ(I, (int)MaskLen);
     }
     for (int I = 1; I < N - 1; ++I) {
       APInt MaskVal = One.shl(I);
       EXPECT_TRUE(MaskVal.isShiftedMask());
+      EXPECT_TRUE(MaskVal.isShiftedMask(MaskIdx, MaskLen));
+      EXPECT_EQ(I, (int)MaskIdx);
+      EXPECT_EQ(1, (int)MaskLen);
     }
     for (int I = 1; I < N; ++I) {
       APInt MaskVal = APInt::getHighBitsSet(N, I);
       EXPECT_TRUE(MaskVal.isShiftedMask());
+      EXPECT_TRUE(MaskVal.isShiftedMask(MaskIdx, MaskLen));
+      EXPECT_EQ(N - I, (int)MaskIdx);
+      EXPECT_EQ(I, (int)MaskLen);
     }
   }
 }
@@ -1781,6 +1803,32 @@ TEST(APIntTest, isPowerOf2) {
 
       APInt MaskVal = One.shl(I);
       EXPECT_TRUE(MaskVal.isPowerOf2());
+    }
+  }
+}
+
+TEST(APIntTest, isNegatedPowerOf2) {
+  EXPECT_FALSE(APInt(5, 0x00).isNegatedPowerOf2());
+  EXPECT_TRUE(APInt(15, 0x7ffe).isNegatedPowerOf2());
+  EXPECT_TRUE(APInt(16, 0xfffc).isNegatedPowerOf2());
+  EXPECT_TRUE(APInt(32, 0xffffffff).isNegatedPowerOf2());
+
+  for (int N : {1, 2, 3, 4, 7, 8, 16, 32, 64, 127, 128, 129, 256}) {
+    EXPECT_FALSE(APInt(N, 0).isNegatedPowerOf2());
+    EXPECT_TRUE(APInt::getAllOnes(N).isNegatedPowerOf2());
+    EXPECT_TRUE(APInt::getSignedMinValue(N).isNegatedPowerOf2());
+    EXPECT_TRUE((-APInt::getSignedMinValue(N)).isNegatedPowerOf2());
+
+    APInt One(N, 1);
+    for (int I = 1; I < N - 1; ++I) {
+      EXPECT_FALSE(APInt::getOneBitSet(N, I).isNegatedPowerOf2());
+      EXPECT_TRUE((-APInt::getOneBitSet(N, I)).isNegatedPowerOf2());
+
+      APInt MaskVal = One.shl(I);
+      EXPECT_TRUE((-MaskVal).isNegatedPowerOf2());
+
+      APInt ShiftMaskVal = One.getHighBitsSet(N, I);
+      EXPECT_TRUE(ShiftMaskVal.isNegatedPowerOf2());
     }
   }
 }
@@ -3027,6 +3075,9 @@ TEST(APIntTest, ZeroWidth) {
   EXPECT_EQ(0, ZW.zext(4));
   EXPECT_EQ(0U, APInt(4, 3).trunc(0).getBitWidth());
   EXPECT_TRUE(ZW.isAllOnes());
+
+  // Zero extension.
+  EXPECT_EQ(0U, ZW.getZExtValue());
 
   SmallString<42> STR;
   ZW.toStringUnsigned(STR);

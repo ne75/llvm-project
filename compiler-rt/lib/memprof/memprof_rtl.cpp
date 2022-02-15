@@ -21,6 +21,7 @@
 #include "memprof_thread.h"
 #include "sanitizer_common/sanitizer_atomic.h"
 #include "sanitizer_common/sanitizer_flags.h"
+#include "sanitizer_common/sanitizer_interface_internal.h"
 #include "sanitizer_common/sanitizer_libc.h"
 #include "sanitizer_common/sanitizer_symbolizer.h"
 
@@ -38,6 +39,7 @@ static void MemprofDie() {
   if (atomic_fetch_add(&num_calls, 1, memory_order_relaxed) != 0) {
     // Don't die twice - run a busy loop.
     while (1) {
+      internal_sched_yield();
     }
   }
   if (common_flags()->print_module_map >= 1)
@@ -132,13 +134,6 @@ void PrintAddressSpaceLayout() {
   Printf("SHADOW_OFFSET: 0x%zx\n", (uptr)SHADOW_OFFSET);
   CHECK(SHADOW_SCALE >= 3 && SHADOW_SCALE <= 7);
 }
-
-static bool UNUSED __local_memprof_dyninit = [] {
-  MaybeStartBackgroudThread();
-  SetSoftRssLimitExceededCallback(MemprofSoftRssLimitExceededCallback);
-
-  return false;
-}();
 
 static void MemprofInitInternal() {
   if (LIKELY(memprof_inited))

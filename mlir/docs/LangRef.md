@@ -3,7 +3,7 @@
 MLIR (Multi-Level IR) is a compiler intermediate representation with
 similarities to traditional three-address SSA representations (like
 [LLVM IR](http://llvm.org/docs/LangRef.html) or
-[SIL](https://github.com/apple/swift/blob/master/docs/SIL.rst)), but which
+[SIL](https://github.com/apple/swift/blob/main/docs/SIL.rst)), but which
 introduces notions from polyhedral loop optimization as first-class concepts.
 This hybrid design is optimized to represent, analyze, and transform high level
 dataflow graphs as well as target-specific code generated for high performance
@@ -178,6 +178,19 @@ string-literal  ::= `"` [^"\n\f\v\r]* `"`   TODO: define escaping rules
 
 Not listed here, but MLIR does support comments. They use standard BCPL syntax,
 starting with a `//` and going until the end of the line.
+
+
+### Top level Productions
+
+```
+// Top level production
+toplevel := (operation | attribute-alias-def | type-alias-def)*
+```
+
+The production `toplevel` is the top level production that is parsed by any parsing
+consuming the MLIR syntax. [Operations](#operations),
+[Attribute alises](#attribute-value-aliases), and [Type aliases](#type-aliases)
+can be declared on the toplevel.
 
 ### Identifiers and keywords
 
@@ -378,21 +391,21 @@ arguments:
 ```mlir
 func @simple(i64, i1) -> i64 {
 ^bb0(%a: i64, %cond: i1): // Code dominated by ^bb0 may refer to %a
-  cond_br %cond, ^bb1, ^bb2
+  cf.cond_br %cond, ^bb1, ^bb2
 
 ^bb1:
-  br ^bb3(%a: i64)    // Branch passes %a as the argument
+  cf.br ^bb3(%a: i64)    // Branch passes %a as the argument
 
 ^bb2:
   %b = arith.addi %a, %a : i64
-  br ^bb3(%b: i64)    // Branch passes %b as the argument
+  cf.br ^bb3(%b: i64)    // Branch passes %b as the argument
 
 // ^bb3 receives an argument, named %c, from predecessors
 // and passes it on to bb4 along with %a. %a is referenced
 // directly from its defining operation and is not passed through
 // an argument of ^bb3.
 ^bb3(%c: i64):
-  br ^bb4(%c, %a : i64, i64)
+  cf.br ^bb4(%c, %a : i64, i64)
 
 ^bb4(%d : i64, %e : i64):
   %0 = arith.addi %d, %e : i64
@@ -439,7 +452,7 @@ For example, in a function body, block terminators must either branch to a
 different block, or return from a function where the types of the `return`
 arguments must match the result types of the function signature. Similarly, the
 function arguments must match the types and count of the region arguments. In
-general, operations with regions can define these correspondances arbitrarily.
+general, operations with regions can define these correspondences arbitrarily.
 
 ### Value Scoping
 
@@ -512,12 +525,12 @@ Example:
 ```mlir
 func @accelerator_compute(i64, i1) -> i64 { // An SSACFG region
 ^bb0(%a: i64, %cond: i1): // Code dominated by ^bb0 may refer to %a
-  cond_br %cond, ^bb1, ^bb2
+  cf.cond_br %cond, ^bb1, ^bb2
 
 ^bb1:
   // This def for %value does not dominate ^bb2
   %value = "op.convert"(%a) : (i64) -> i64
-  br ^bb3(%a: i64)    // Branch passes %a as the argument
+  cf.br ^bb3(%a: i64)    // Branch passes %a as the argument
 
 ^bb2:
   accelerator.launch() { // An SSACFG region

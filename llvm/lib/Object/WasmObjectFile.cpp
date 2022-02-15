@@ -8,7 +8,6 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
@@ -30,7 +29,6 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <system_error>
 
 #define DEBUG_TYPE "wasm-object"
 
@@ -359,7 +357,7 @@ Error WasmObjectFile::parseDylinkSection(ReadContext &Ctx) {
 
 Error WasmObjectFile::parseDylink0Section(ReadContext &Ctx) {
   // See
-  // https://github.com/WebAssembly/tool-conventions/blob/master/DynamicLinking.md
+  // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
   HasDylinkSection = true;
 
   const uint8_t *OrigEnd = Ctx.End;

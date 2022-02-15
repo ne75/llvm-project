@@ -376,6 +376,11 @@ def TrustNonnullChecker : Checker<"TrustNonnull">,
            "are not null">,
   Documentation<NotDocumented>;
 
+def TrustReturnsNonnullChecker : Checker<"TrustReturnsNonnull">,
+  HelpText<"Trust that returns from methods annotated with returns_nonnull "
+           "are not null">,
+  Documentation<NotDocumented>;
+
 } // end "apiModeling"
 
 //===----------------------------------------------------------------------===//
@@ -552,7 +557,7 @@ def StdCLibraryFunctionArgsChecker : Checker<"StdCLibraryFunctionArgs">,
            "or is EOF.">,
   Dependencies<[StdCLibraryFunctionsChecker]>,
   WeakDependencies<[CallAndMessageChecker, NonNullParamChecker, StreamChecker]>,
-  Documentation<NotDocumented>;
+  Documentation<HasAlphaDocumentation>;
 
 } // end "alpha.unix"
 
@@ -602,6 +607,10 @@ def SmartPtrModeling: Checker<"SmartPtrModeling">,
                   Hide>,
   ]>,
   Hidden;
+
+def StringChecker: Checker<"StringChecker">,
+  HelpText<"Checks C++ std::string bugs">,
+  Documentation<HasDocumentation>;
 
 def MoveChecker: Checker<"Move">,
   HelpText<"Find use-after-move bugs in C++">,

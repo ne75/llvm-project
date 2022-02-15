@@ -5,8 +5,9 @@
 // RUN:               -async-runtime-ref-counting-opt                          \
 // RUN:               -convert-async-to-llvm                                   \
 // RUN:               -convert-linalg-to-loops                                 \
-// RUN:               -convert-scf-to-std                                      \
-// RUN:               -std-expand                                              \
+// RUN:               -convert-scf-to-cf                                      \
+// RUN:               -arith-expand                                            \
+// RUN:               -memref-expand                                              \
 // RUN:               -convert-vector-to-llvm                                  \
 // RUN:               -convert-memref-to-llvm                                  \
 // RUN:               -convert-std-to-llvm                                     \
@@ -25,8 +26,9 @@
 // RUN:               -async-runtime-ref-counting-opt                          \
 // RUN:               -convert-async-to-llvm                                   \
 // RUN:               -convert-linalg-to-loops                                 \
-// RUN:               -convert-scf-to-std                                      \
-// RUN:               -std-expand                                              \
+// RUN:               -convert-scf-to-cf                                      \
+// RUN:               -arith-expand                                            \
+// RUN:               -memref-expand                                              \
 // RUN:               -convert-vector-to-llvm                                  \
 // RUN:               -convert-memref-to-llvm                                  \
 // RUN:               -convert-std-to-llvm                                     \
@@ -40,7 +42,7 @@
 
 // RUN:   mlir-opt %s                                                          \
 // RUN:               -convert-linalg-to-loops                                 \
-// RUN:               -convert-scf-to-std                                      \
+// RUN:               -convert-scf-to-cf                                      \
 // RUN:               -convert-vector-to-llvm                                  \
 // RUN:               -convert-memref-to-llvm                                  \
 // RUN:               -convert-std-to-llvm                                     \
@@ -78,7 +80,7 @@ func @entry() {
   %f4 = arith.constant 4.0 : f32
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
-  %cM = arith.constant 1000 : index
+  %cN = arith.constant 50 : index
 
   //
   // Sanity check for the function under test.
@@ -130,7 +132,7 @@ func @entry() {
   //
 
   %t0 = call @rtclock() : () -> f64
-  scf.for %i = %c0 to %cM step %c1 {
+  scf.for %i = %c0 to %cN step %c1 {
     call @scf_parallel(%LHS0, %RHS0, %DST0)
       : (memref<?x?xf32>, memref<?x?xf32>, memref<?x?xf32>) -> ()
   }

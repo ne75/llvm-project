@@ -158,7 +158,7 @@ def LinalgStructuredInterface : OpInterface<"LinalgOp"> {
       }],
       /*retTy=*/"void",
       /*methodName=*/"getParallelDims",
-      /*args=*/(ins "SmallVectorImpl<AffineExpr> &":$res),
+      /*args=*/(ins "SmallVectorImpl<unsigned> &":$res),
       /*methodBody=*/"",
       /*defaultImplementation=*/[{
         return getDimsOfType($_op, getParallelIteratorTypeName(), res);
@@ -183,7 +183,7 @@ def LinalgStructuredInterface : OpInterface<"LinalgOp"> {
       }],
       /*retTy=*/"void",
       /*methodName=*/"getReductionDims",
-      /*args=*/(ins "SmallVectorImpl<AffineExpr> &":$res),
+      /*args=*/(ins "SmallVectorImpl<unsigned> &":$res),
       /*methodBody=*/"",
       /*defaultImplementation=*/[{
         return getDimsOfType($_op, getReductionIteratorTypeName(), res);
@@ -208,7 +208,7 @@ def LinalgStructuredInterface : OpInterface<"LinalgOp"> {
       }],
       /*retTy=*/"void",
       /*methodName=*/"getWindowDims",
-      /*args=*/(ins "SmallVectorImpl<AffineExpr> &":$res),
+      /*args=*/(ins "SmallVectorImpl<unsigned> &":$res),
       /*methodBody=*/"",
       /*defaultImplementation=*/[{
         return getDimsOfType($_op.getOperation(), getWindowIteratorTypeName(), res);
@@ -408,6 +408,19 @@ def LinalgStructuredInterface : OpInterface<"LinalgOp"> {
       /*defaultImplementation=*/[{
         assert(i >= 0 && i < getNumOutputs());
         return &this->getOperation()->getOpOperand(getNumInputs() + i);
+      }]
+    >,
+    InterfaceMethod<
+      /*desc=*/[{
+        Set the `i`-th output operand.
+      }],
+      /*retTy=*/"void",
+      /*methodName=*/"setOutputOperand",
+      /*args=*/(ins "int64_t":$i, "Value":$value),
+      /*methodBody=*/"",
+      /*defaultImplementation=*/[{
+        assert(i >= 0 && i < getNumOutputs());
+        this->getOperation()->setOperand(getNumInputs() + i, value);
       }]
     >,
     InterfaceMethod<
@@ -630,6 +643,19 @@ def LinalgStructuredInterface : OpInterface<"LinalgOp"> {
     >,
     InterfaceMethod<
       /*desc=*/[{
+        Return the block argument for an `opOperand`.
+      }],
+      /*retTy=*/"BlockArgument",
+      /*methodName=*/"getTiedBlockArgument",
+      /*args=*/(ins "OpOperand *":$opOperand),
+      /*methodBody=*/"",
+      /*defaultImplementation=*/[{
+        assert(opOperand->getOwner() == this->getOperation());
+        return getBlock()->getArgument(opOperand->getOperandNumber());
+      }]
+    >,
+    InterfaceMethod<
+      /*desc=*/[{
         Return the input or output indexing map for `opOperand`.
       }],
       /*retTy=*/"AffineMap",
@@ -657,6 +683,24 @@ def LinalgStructuredInterface : OpInterface<"LinalgOp"> {
         assert(resultIndex >= 0 &&
                resultIndex < this->getOperation()->getNumResults() );
         return this->getOperation()->getResult(resultIndex);
+      }]
+    >,
+    InterfaceMethod<
+      /*desc=*/[{
+        Return the value yielded by the region corresponding to an output
+        `opOperand`.
+      }],
+      /*retTy=*/"OpOperand *",
+      /*methodName=*/"getTiedYieldValue",
+      /*args=*/(ins "OpOperand*":$opOperand),
+      /*methodBody=*/"",
+      /*defaultImplementation=*/[{
+        assert(opOperand->getOwner() == this->getOperation());
+        int64_t resultIndex = opOperand->getOperandNumber() - getNumInputs();
+        assert(resultIndex >= 0 &&
+               resultIndex < this->getOperation()->getNumResults());
+        Operation *yieldOp = getBlock()->getTerminator();
+        return &yieldOp->getOpOperand(resultIndex);
       }]
     >,
     //===------------------------------------------------------------------===//
@@ -981,7 +1025,7 @@ def LinalgStructuredInterface : OpInterface<"LinalgOp"> {
         Returns a null function if this named op does not define a region
         builder.
       }],
-      /*retTy=*/"std::function<void(ImplicitLocOpBuilder &, Block &)>",
+      /*retTy=*/"std::function<void(ImplicitLocOpBuilder &, Block &, ArrayRef<NamedAttribute>)>",
       /*methodName=*/"getRegionBuilder",
       (ins),
       [{ return ConcreteOp::getRegionBuilder(); }]

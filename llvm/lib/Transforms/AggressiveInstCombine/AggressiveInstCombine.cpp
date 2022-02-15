@@ -200,14 +200,13 @@ static bool foldGuardedFunnelShift(Instruction &I, const DominatorTree &DT) {
 /// of 'and' ops, then we also need to capture the fact that we saw an
 /// "and X, 1", so that's an extra return value for that case.
 struct MaskOps {
-  Value *Root;
+  Value *Root = nullptr;
   APInt Mask;
   bool MatchAndChain;
-  bool FoundAnd1;
+  bool FoundAnd1 = false;
 
   MaskOps(unsigned BitWidth, bool MatchAnds)
-      : Root(nullptr), Mask(APInt::getZero(BitWidth)), MatchAndChain(MatchAnds),
-        FoundAnd1(false) {}
+      : Mask(APInt::getZero(BitWidth)), MatchAndChain(MatchAnds) {}
 };
 
 /// This is a recursive helper for foldAnyOrAllBitsSet() that walks through a
@@ -378,10 +377,10 @@ static bool foldUnusualPatterns(Function &F, DominatorTree &DT) {
     // Also, we want to avoid matching partial patterns.
     // TODO: It would be more efficient if we removed dead instructions
     // iteratively in this loop rather than waiting until the end.
-    for (Instruction &I : make_range(BB.rbegin(), BB.rend())) {
+    for (Instruction &I : llvm::reverse(BB)) {
       MadeChange |= foldAnyOrAllBitsSet(I);
       MadeChange |= foldGuardedFunnelShift(I, DT);
-      MadeChange |= tryToRecognizePopCount(I); 
+      MadeChange |= tryToRecognizePopCount(I);
     }
   }
 
