@@ -17,7 +17,6 @@
 #include "llvm/MC/MCInstPrinter.h"
 
 namespace llvm {
-
     class P2InstPrinter : public MCInstPrinter {
 
         const MCRegisterInfo &MRI;
