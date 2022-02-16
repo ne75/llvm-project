@@ -844,7 +844,7 @@ std::pair<unsigned, const TargetRegisterClass *> P2TargetLowering::getRegForInli
             default: 
                 break;
             case 'r':
-                if (VT == MVT::i32 || VT == MVT::i16 || VT == MVT::i8)
+                if (VT == MVT::i32)
                     return std::make_pair(0U, &P2::P2GPRRegClass);
         }
     }
