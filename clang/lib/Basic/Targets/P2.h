@@ -25,39 +25,17 @@ namespace targets {
 class LLVM_LIBRARY_VISIBILITY P2TargetInfo : public TargetInfo {
   static const char *const GCCRegNames[];
 
+  bool IsDebug;
+
 public:
   P2TargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
-        // TODO: fill this out, though most defaults seem to work fine
-    // TLSSupported = false;
-    // PointerWidth = 32;
-    // PointerAlign = 8;
-    // IntWidth = 32;
-    // IntAlign = 8;
-    // LongWidth = 32;
-    // LongAlign = 8;
-    // LongLongWidth = 64;
-    // LongLongAlign = 8;
-    // SuitableAlign = 8;
-    // DefaultAlignForAttributeAligned = 8;
-    // HalfWidth = 16;
-    // HalfAlign = 8;
-    // FloatWidth = 32;
-    // FloatAlign = 8;
-    // DoubleWidth = 32;
-    // DoubleAlign = 8;
-    // DoubleFormat = &llvm::APFloat::IEEEsingle();
-    // LongDoubleWidth = 32;
-    // LongDoubleAlign = 8;
-    // LongDoubleFormat = &llvm::APFloat::IEEEsingle();
-    // SizeType = UnsignedInt;
-    // PtrDiffType = SignedInt;
-    // IntPtrType = SignedInt;
-    // Char16Type = UnsignedInt;
-    // WIntType = SignedInt;
-    // Char32Type = UnsignedLong;
-    // SigAtomicType = SignedChar;
+    TLSSupported = false;
+    FloatFormat =  &llvm::APFloat::IEEEsingle();
+    DoubleFormat = &llvm::APFloat::IEEEdouble();
     BigEndian = false;
+
+    IsDebug = false;
     resetDataLayout("e-p:32:32-i32:32-i64:32");
   }
 
@@ -84,7 +62,31 @@ public:
   }
 
   bool validateAsmConstraint(const char *&Name, TargetInfo::ConstraintInfo &Info) const override {
+    if (StringRef(Name).size() > 1)
+      return false;
+
+    switch (*Name) {
+    default:
+      return false;
+    case 'r':
+      Info.setAllowsRegister();
       return true;
+    case 'i': // 6-bit positive integer constant
+      Info.setRequiresImmediate(0, 0xffffffff);
+      return true;
+    }
+
+    return false;
+  }
+
+  bool handleTargetFeatures(std::vector<std::string> &Features,
+                            DiagnosticsEngine &Diags) override {
+
+    for (const auto &Feature : Features) {
+      if (Feature == "+p2db") IsDebug = true;
+    }
+
+    return true;
   }
 
   IntType getIntTypeByWidth(unsigned BitWidth, bool IsSigned) const final {

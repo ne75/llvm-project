@@ -30,10 +30,12 @@ using namespace llvm::opt;
 
 const StringRef PossibleP2LibCLocations[] = {
     "/opt/p2llvm/libc",
+    "/opt/p2/libc",
 };
 
 const StringRef PossibleP2LibP2Locations[] = {
     "/opt/p2llvm/libp2",
+    "/opt/p2/libp2",
 };
 
 /// P2 Toolchain
@@ -110,12 +112,16 @@ void P2::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     Args.AddAllArgs(CmdArgs, options::OPT_L);
     getToolChain().AddFilePathLibArgs(Args, CmdArgs);
 
-    CmdArgs.push_back("-lc");
     CmdArgs.push_back("--whole-archive");
+    CmdArgs.push_back("-lc");
     CmdArgs.push_back("-lp2");
-    CmdArgs.push_back("--no-whole-archive");
-    CmdArgs.push_back("-Tp2.ld");
 
+    if (Args.hasArg(options::OPT_mp2db)) {
+        CmdArgs.push_back("-lp2db");
+        CmdArgs.push_back("-Tp2_debug.ld");
+    } else {
+        CmdArgs.push_back("-Tp2.ld");
+    }
     std::string sys_root = getToolChain().computeSysRoot();
 
     CmdArgs.push_back(Args.MakeArgString("-L" + sys_root));
