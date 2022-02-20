@@ -69,10 +69,14 @@ namespace lld {
                     write32le(loc, val);
                     break;
                 }
+                case R_P2_PC20:
                 case R_P2_20: {
                     uint32_t inst = read32le(loc);
-                    inst += val & 0xfffff; // val is the relocation value, which is just the section this relocation references
-                                           // so, we just add the new value (val) to the instructions to offset the 20 bit operand
+                    // extract the original 20 bit value, and add the the 20 bit value with wrapping
+                    uint32_t inst_val = (inst + val) & 0xfffff;
+                    uint32_t inst_code = inst & ~0xfffff;
+                    inst = inst_code + inst_val;
+
                     write32le(loc, inst);
                     break;
                 }
