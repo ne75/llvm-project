@@ -31,7 +31,7 @@ def P2AbsAddrOperand : AsmOperandClass {
 }
 
 def absjmptarget    : Operand<OtherVT> {
-    let EncoderMethod = "getJumpTargetOpValue";
+    let EncoderMethod = "getJumpAbsTargetOpValue";
     let OperandType = "OPERAND_IMMEDIATE";
     let ParserMatchClass = P2AbsAddrOperand;
 }
@@ -49,7 +49,7 @@ def jmp9target    : Operand<OtherVT> {
 }
 
 def abscalltarget : Operand<iPTR> {
-    let EncoderMethod = "encodeCallTarget";
+    let EncoderMethod = "encodeAbsCallTarget";
     let ParserMatchClass = P2AbsAddrOperand;
 }
 

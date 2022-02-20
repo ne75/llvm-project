@@ -33,6 +33,7 @@ public:
     TLSSupported = false;
     FloatFormat =  &llvm::APFloat::IEEEsingle();
     DoubleFormat = &llvm::APFloat::IEEEdouble();
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     BigEndian = false;
 
     IsDebug = false;
