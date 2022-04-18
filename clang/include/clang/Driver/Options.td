@@ -177,6 +177,9 @@ def m_x86_Features_Group : OptionGroup<"<x86 features group>">,
 def m_riscv_Features_Group : OptionGroup<"<riscv features group>">,
                              Group<m_Group>, DocName<"RISCV">;
 
+def m_p2_Features_Group : OptionGroup<"<p2 features group>">,
+                             Group<m_Group>, DocName<"P2">;
+
 def m_libc_Group : OptionGroup<"<m libc group>">, Group<m_mips_Features_Group>,
                    Flags<[HelpHidden]>;
 
@@ -3268,6 +3271,8 @@ def mcmodel_EQ_medany : Flag<["-"], "mcmodel=medany">, Group<m_riscv_Features_Gr
   HelpText<"Equivalent to -mcmodel=medium, compatible with RISC-V gcc.">;
 def menable_experimental_extensions : Flag<["-"], "menable-experimental-extensions">, Group<m_Group>,
   HelpText<"Enable use of experimental RISC-V extensions.">;
+
+def mp2db : Flag<["-"], "mp2db">, Group<m_p2_Features_Group>, HelpText<"Enable and link P2DB code">;
 
 def munaligned_access : Flag<["-"], "munaligned-access">, Group<m_arm_Features_Group>,
   HelpText<"Allow memory accesses to be unaligned (AArch32/AArch64 only)">;

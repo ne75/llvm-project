@@ -32,7 +32,10 @@ typedef MCDisassembler::DecodeStatus DecodeStatus;
 
 namespace {
 
-/// A disassembler class for P2.
+//===----------------------------------------------------------------------===//
+// Class Definitions
+//===----------------------------------------------------------------------===//
+
 class P2Disassembler : public MCDisassembler {
     public:
     	P2Disassembler(const MCSubtargetInfo &STI, MCContext &Ctx) : MCDisassembler(STI, Ctx) {}
@@ -44,14 +47,52 @@ class P2Disassembler : public MCDisassembler {
     };
 }
 
+class P2Symbolizer : public MCSymbolizer {
+private:
+    void *DisInfo;
+
+public:
+    P2Symbolizer(MCContext &Ctx, std::unique_ptr<MCRelocationInfo> &&RelInfo,
+                    void *disInfo)
+                    : MCSymbolizer(Ctx, std::move(RelInfo)), DisInfo(disInfo) {}
+
+    bool tryAddingSymbolicOperand(MCInst &Inst, raw_ostream &cStream,
+                                int64_t Value, uint64_t Address,
+                                bool IsBranch, uint64_t Offset,
+                                uint64_t InstSize) override;
+
+    void tryAddingPcLoadReferenceComment(raw_ostream &cStream,
+                                        int64_t Value,
+                                        uint64_t Address) override;
+};
+
+//===----------------------------------------------------------------------===//
+// Initialization
+//===----------------------------------------------------------------------===//
+
 static MCDisassembler *createP2Disassembler(const Target &T, const MCSubtargetInfo &STI, MCContext &Ctx) {
 	return new P2Disassembler(STI, Ctx);
 }
 
+static MCSymbolizer *createP2Symbolizer(const Triple &/*TT*/,
+                              LLVMOpInfoCallback GetOpInfo,
+                              LLVMSymbolLookupCallback /*SymbolLookUp*/,
+                              void *DisInfo,
+                              MCContext *Ctx,
+                              std::unique_ptr<MCRelocationInfo> &&RelInfo) {
+  return new P2Symbolizer(*Ctx, std::move(RelInfo), DisInfo);
+}
+
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeP2Disassembler() {
 	// Register the disassembler.
 	TargetRegistry::RegisterMCDisassembler(getTheP2Target(), createP2Disassembler);
+    TargetRegistry::RegisterMCSymbolizer(getTheP2Target(), createP2Symbolizer);
 }
+
+//===----------------------------------------------------------------------===//
+// P2Disassembler
+//===----------------------------------------------------------------------===//
 
 static const uint16_t GPRDecoderTable[] = {
     P2::R0, P2::R1, P2::R2, P2::R3, P2::R4, P2::R5, P2::R6, P2::R7,
@@ -113,17 +154,24 @@ static DecodeStatus decodeJump9Target(MCInst &Inst, unsigned Insn, uint64_t Addr
 }
 
 static DecodeStatus DecodeCallInstruction(MCInst &Inst, unsigned Insn, uint64_t Address, const void *Decoder) {
-    int32_t a_field = fieldFromInstruction(Insn, 0, 20);
-    int32_t d_field = fieldFromInstruction(Insn, 9, 9);
+    uint32_t a_field = fieldFromInstruction(Insn, 0, 20);
+    uint32_t d_field = fieldFromInstruction(Insn, 9, 9);
 
     unsigned opc = Inst.getOpcode();
-    if (opc == P2::CALL || opc == P2::CALLa || opc == P2::CALLAa) {
-        // FIXME: make this work.
-        const MCDisassembler *Dis = static_cast<const MCDisassembler*>(Decoder);
-        if (!Dis->tryAddingSymbolicOperand(Inst, a_field, Address, false, 0, 32)) {
-            LLVM_DEBUG(errs() << "unabled to add symbol\n");
+    if (opc == P2::CALLa || opc == P2::CALLAa) {
+        uint32_t call_addr = a_field;
+
+        if (a_field >= 0x200 && a_field < 0x400) {
+            // this is a call to a LUT address, adjust it before trying to create a symbol.
+            call_addr = 4*(a_field - 0x200) + 0x200;
+        }
+
+        auto *Dis = static_cast<const MCDisassembler*>(Decoder);
+        if (!Dis->tryAddingSymbolicOperand(Inst, call_addr, Address, true, 0, 1)) {
             Inst.addOperand(MCOperand::createImm(a_field));
         }
+    } else if (opc == P2::CALL) {
+        Inst.addOperand(MCOperand::createImm(a_field));
     } else {
         Inst.addOperand(MCOperand::createReg(getRegForField(d_field)));
     }
@@ -302,8 +350,6 @@ DecodeStatus P2Disassembler::getInstruction(MCInst &Instr, uint64_t &Size, Array
 
 	Result = readInstruction(Bytes, Address, Size, Insn);
 	if (Result == MCDisassembler::Fail) return MCDisassembler::Fail;
-    // set the TSFlags for the instruction printer
-    // FIXME: add writing the C/Z flags to TSFlags for printing
 
     LLVM_DEBUG(errs() << "get instruction: " << Insn << "\n");
 
@@ -319,3 +365,50 @@ DecodeStatus P2Disassembler::getInstruction(MCInst &Instr, uint64_t &Size, Array
 
 typedef DecodeStatus (*DecodeFunc)(MCInst &MI, unsigned insn, uint64_t Address, const void *Decoder);
 
+//===----------------------------------------------------------------------===//
+// P2Symbolizer
+//===----------------------------------------------------------------------===//
+
+// Try to find symbol name for specified label
+// it only works for complete elfs--anything that's a relocation doesn't work correctly
+bool P2Symbolizer::tryAddingSymbolicOperand(MCInst &Inst,
+                                raw_ostream &/*cStream*/, int64_t Value,
+                                uint64_t Address, bool IsBranch,
+                                uint64_t /*Offset*/, uint64_t /*InstSize*/) {
+
+    if (!IsBranch) { // only symbolize branches/calls
+        return false;
+    }
+
+    if (Value == 0) {
+        // If we are disassembling a complete program, branches to 0 are not possible, (except for in custom COG code)
+        // so leave it as 0.
+        // If we are disassembling an object file with fixups, I don't know how to get that data in this function, 
+        // so don't try to create a symbol.
+        return false;
+    }
+
+    auto *Symbols = static_cast<SectionSymbolsTy *>(DisInfo);
+    if (!Symbols) {
+        return false;
+    }
+
+    auto Result = llvm::find_if(*Symbols, [Value](const SymbolInfoTy &Val) {
+        return Val.Addr == static_cast<uint64_t>(Value) && Val.Type == ELF::STT_FUNC;
+    });
+
+    if (Result != Symbols->end()) {
+        auto *Sym = Ctx.getOrCreateSymbol(Result->Name);
+        const auto *Add = MCSymbolRefExpr::create(Sym, Ctx);
+        Inst.addOperand(MCOperand::createExpr(Add));
+        return true;
+    }
+    
+    return false;
+}
+
+void P2Symbolizer::tryAddingPcLoadReferenceComment(raw_ostream &cStream,
+                                                       int64_t Value,
+                                                       uint64_t Address) {
+    llvm_unreachable("unimplemented");
+}

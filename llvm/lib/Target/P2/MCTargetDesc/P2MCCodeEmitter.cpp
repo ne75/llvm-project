@@ -96,6 +96,26 @@ unsigned P2MCCodeEmitter::getJumpTargetOpValue(const MCInst &MI, unsigned OpNo, 
     return 0;
 }
 
+unsigned P2MCCodeEmitter::getJumpAbsTargetOpValue(const MCInst &MI, unsigned OpNo, SmallVectorImpl<MCFixup> &Fixups,
+                                                const MCSubtargetInfo &STI) const {
+    const MCOperand &MO = MI.getOperand(OpNo);
+    // If the destination is an immediate, we have nothing to do.
+
+    if (MO.isImm()) {
+        LLVM_DEBUG(errs() << "jump target = " << MO.getImm() << "\n");
+        return MO.getImm();
+    }
+
+    assert(MO.isExpr() && "getJumpAbsTargetOpValue expects only expressions if not an immediate");
+    LLVM_DEBUG(errs() << "--- creating absolute fixup for jump operand\n");
+
+    const MCExpr *Expr = MO.getExpr();
+    LLVM_DEBUG(Expr->dump());
+    Fixups.push_back(MCFixup::create(0, Expr, MCFixupKind(P2::fixup_P2_20)));
+
+    return 0;
+}
+
 unsigned P2MCCodeEmitter::getJump9TargetOpValue(const MCInst &MI, unsigned OpNo, SmallVectorImpl<MCFixup> &Fixups,
                                                 const MCSubtargetInfo &STI) const {
     const MCOperand &MO = MI.getOperand(OpNo);
@@ -135,13 +155,39 @@ unsigned P2MCCodeEmitter::encodeCallTarget(const MCInst &MI, unsigned OpNo, Smal
             LLVM_DEBUG(errs() << "creating libcall (cog9) fixup fixup\n");
             FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_COG9);
         } else {
-            if (MI.getOpcode() == P2::CALL) {
-                LLVM_DEBUG(errs() << "creating relative call fixup\n");
-                FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_PC20);
-            } else {
-                LLVM_DEBUG(errs() << "creating normal callfixup\n");
-                FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_20);
-            }
+            FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_PC20);
+        }
+
+        Fixups.push_back(MCFixup::create(0, MO.getExpr(), FixupKind, MI.getLoc()));
+        return 0;
+    }
+
+    assert(MO.isImm() && "non-immediate expression not handled by encodeCallTarget");
+
+    auto Target = MO.getImm();
+    return Target;
+}
+
+unsigned P2MCCodeEmitter::encodeAbsCallTarget(const MCInst &MI, unsigned OpNo, SmallVectorImpl<MCFixup> &Fixups,
+                                            const MCSubtargetInfo &STI) const {
+    const MCOperand &MO = MI.getOperand(OpNo);
+
+    LLVM_DEBUG(errs() << "--- encode absolute call target for operand: ");
+    LLVM_DEBUG(MO.dump());
+
+    if (MO.isExpr()) {
+        LLVM_DEBUG(errs() << "call target for operand is an expression of kind: ");
+        LLVM_DEBUG(errs() << (unsigned)MO.getExpr()->getKind() << "\n");
+        MCFixupKind FixupKind;
+        const MCSymbolRefExpr* expr = static_cast<const MCSymbolRefExpr*>(MO.getExpr());
+
+        LLVM_DEBUG(expr->dump());
+
+        if (is_rtlib(expr->getSymbol())) {
+            LLVM_DEBUG(errs() << "creating libcall (cog9) fixup fixup\n");
+            FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_COG9);
+        } else {
+            FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_20);
         }
 
         Fixups.push_back(MCFixup::create(0, MO.getExpr(), FixupKind, MI.getLoc()));

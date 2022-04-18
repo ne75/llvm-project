@@ -106,6 +106,7 @@ static void printExpr(const MCExpr *Expr, const MCAsmInfo *MAI, raw_ostream &OS)
 
 void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &O) {
     const MCOperand &Op = MI->getOperand(OpNum);
+    auto opc = MI->getOpcode();
 
     if (Op.isReg()) {
         printRegName(O, Op.getReg());
@@ -143,7 +144,9 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
             return;
         }
 
-        if (!isUInt<9>(Op.getImm()) && !isInt<9>(Op.getImm())) O << "#";
+        if (opc != P2::AUGD && opc != P2::AUGS)
+            if (!(isUInt<9>(Op.getImm() || isInt<9>(Op.getImm())))) O << "#";
+
         O << "#" << Op.getImm();
         return;
     }

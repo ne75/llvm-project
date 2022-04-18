@@ -145,6 +145,7 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::MULHU, MVT::i64, Expand);
     setOperationAction(ISD::ROTL, MVT::i64, Expand);
     setOperationAction(ISD::ROTR, MVT::i64, Expand);
+<<<<<<< HEAD
 
     setOperationAction(ISD::SHL_PARTS, MVT::i64, Expand);
     setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
@@ -152,6 +153,8 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
 
     setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
     setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
+=======
+>>>>>>> master
 
     // 64 bit libcalls
     setOperationAction(ISD::SRL, MVT::i64, Custom);
@@ -789,7 +792,7 @@ void P2TargetLowering::getOpndList(SmallVectorImpl<SDValue> &Ops,
 //                           P2 Inline Assembly Support
 //===----------------------------------------------------------------------===//
 
-Register P2TargetLowering::getRegisterByName(StringRef RegName) const {
+Register P2TargetLowering::getRegisterByName(const char *RegName, LLT VT, const MachineFunction &MF) const {
     Register Reg  = StringSwitch<unsigned>(RegName)
             .Case("r0",     P2::R0)
             .Case("r1",     P2::R1)
@@ -844,97 +847,23 @@ Register P2TargetLowering::getRegisterByName(StringRef RegName) const {
     return Reg;
 }
 
-Register P2TargetLowering::getRegisterByName(const char *RegName, LLT VT, const MachineFunction &MF) const {
-    return getRegisterByName(RegName);
-}
-
 /// getConstraintType - Given a constraint letter, return the type of
 /// constraint it is for this target.
-P2TargetLowering::ConstraintType P2TargetLowering::getConstraintType(StringRef Constraint) const {
+TargetLowering::ConstraintType P2TargetLowering::getConstraintType(StringRef Constraint) const {
     return TargetLowering::getConstraintType(Constraint);
 }
 
-/// Examine constraint type and operand type and determine a weight value.
-/// This object must already have been set up with the operand type
-/// and the current alternative constraint selected.
-TargetLowering::ConstraintWeight P2TargetLowering::getSingleConstraintMatchWeight(AsmOperandInfo &info, const char *constraint) const {
-    return CW_Default;
-}
-
-/// This is a helper function to parse a physical register string and split it
-/// into non-numeric and numeric parts (Prefix and Reg). The first boolean flag
-/// that is returned indicates whether parsing was successful. The second flag
-/// is true if the numeric part exists.
-static std::pair<bool, bool> parsePhysicalReg(const StringRef &C, std::string &Prefix, unsigned long long &Reg) {
-  if (C.front() != '{' || C.back() != '}')
-    return std::make_pair(false, false);
-
-  // Search for the first numeric character.
-  StringRef::const_iterator I, B = C.begin() + 1, E = C.end() - 1;
-  I = std::find_if(B, E, std::ptr_fun(isdigit));
-
-  Prefix.assign(B, I - B);
-
-  // The second flag is set to false if no numeric characters were found.
-  if (I == E)
-    return std::make_pair(true, false);
-
-  // Parse the numeric characters.
-  return std::make_pair(!getAsUnsignedInteger(StringRef(I, E - I), 10, Reg), true);
-}
-
-std::pair<unsigned, const TargetRegisterClass *> P2TargetLowering::parseRegForInlineAsmConstraint(const TargetRegisterInfo *TRI, const StringRef &C) const {
-    const TargetRegisterClass *RC;
-    std::string Prefix;
-    unsigned long long Reg;
-
-    std::pair<bool, bool> R = parsePhysicalReg(C, Prefix, Reg);
-
-    LLVM_DEBUG(errs() << "for constraint " << C << ":\n");
-    LLVM_DEBUG(errs() << " prefix is " << Prefix << "\n");
-    LLVM_DEBUG(errs() << " reg is " << Reg << "\n");
-
-    if (!R.first)
-        return std::make_pair(0U, nullptr);
-    if (!R.second)
-        return std::make_pair(0U, nullptr);
-
-    assert(Prefix == "r");
-    RC = TRI->getRegClass(P2::P2GPRRegClassID);
-
-    assert(Reg < RC->getNumRegs());
-    return std::make_pair(*(RC->begin() + P2::R0 + Reg), RC); // hack--we want to find the start of R0.
-}
-
-/// Given a register class constraint, like 'r', if this corresponds directly
-/// to an LLVM register class, return a register of 0 and the register class
-/// pointer.
-std::pair<unsigned, const TargetRegisterClass *> P2TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
-                                                                                                StringRef Constraint,
-                                                                                                MVT VT) const {
+std::pair<unsigned, const TargetRegisterClass *> P2TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI, 
+                                                                                                StringRef Constraint, MVT VT) const {
     if (Constraint.size() == 1) {
         switch (Constraint[0]) {
-            case 'r':
-                if (VT == MVT::i32 || VT == MVT::i16 || VT == MVT::i8) {
-                    return std::make_pair(0U, &P2::P2GPRRegClass);
-                } else {
-                    llvm_unreachable("Unexpected type for constraint r");
-                }
+            default: 
                 break;
+            case 'r':
+                if (VT == MVT::i32)
+                    return std::make_pair(0U, &P2::P2GPRRegClass);
         }
     }
-    
-    int R = getRegisterByName(Constraint.substr(1, Constraint.size()-1));
-    if (R != -1) return std::make_pair(R, TRI->getRegClass(P2::P2GPRRegClassID));
 
     return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
-}
-
-/// LowerAsmOperandForConstraint - Lower the specified operand into the Ops
-/// vector.  If it is invalid, don't add anything to Ops.
-void P2TargetLowering::LowerAsmOperandForConstraint(SDValue Op,
-                                                     std::string &Constraint,
-                                                     std::vector<SDValue>&Ops,
-                                                     SelectionDAG &DAG) const {
-    TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops, DAG);
 }
