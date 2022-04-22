@@ -232,8 +232,10 @@ let DecoderMethod = "DecodeGetQInstruction" in {
 }
 
 let DecoderMethod = "DecodeCordicInstruction" in {
-    defm QMUL   : P2InstLIDSm<0b11010000, "qmul">;
-    defm QDIV   : P2InstLIDSm<0b11010001, "qdiv">;
+    defm QMUL       : P2InstLIDSm<0b11010000, "qmul">;
+    defm QDIV       : P2InstLIDSm<0b11010001, "qdiv">;
+    defm QROTATE    : P2InstLIDSm<0b11010100, "qrotate">;
+    defm QVECTOR    : P2InstLIDSm<0b11010100, "qvector">;
 }
 
 def QUDIV   : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src1, P2GPR:$src2), "udiv $dst, $src1, $src2">;
