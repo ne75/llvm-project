@@ -68,11 +68,15 @@ BitVector P2RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
     Reserved.set(P2::QX);
     Reserved.set(P2::QY);
 
-    Reserved.set(P2::R30); // reserve R30 since it's used for returns
-    Reserved.set(P2::R31); // reserve R31 since it's used for returns
+    // don't think we need to reserve these--they are free to use inside the function if necessary
+    // Reserved.set(P2::R28); // reserve R30 since it's used for returns
+    // Reserved.set(P2::R29); // reserve R31 since it's used for returns
+    // Reserved.set(P2::R30); // reserve R30 since it's used for returns
+    // Reserved.set(P2::R31); // reserve R31 since it's used for returns
 
-    Reserved.set(P2::R30_R31); // reserve the long long return "register"
-
+    // Reserved.set(P2::R30_R31); // reserve the long long return "register"
+    // Reserved.set(P2::R28_R29);
+    
     // reserve all "cogram" regsisters
     for (int i = P2::C0; i <= P2::C463; i++) {
         Reserved.set(i);
@@ -121,6 +125,7 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
     // if the op code using the frame index is rdlong or wrlong, we can use a special immediate to read/write PTRA
     // bool can_use_ptr_off = (op == P2::WRLONGri) || (op == P2::RDLONGri);
 
+    // TODO redo to use ALTS
     int op = MI.getOpcode();
     if (op == P2::FRMIDX) {
         MI.setDesc(inst_info.get(P2::MOVrr)); // change our psesudo instruction to a mov
@@ -128,14 +133,18 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
         MI.addOperand(MachineOperand::CreateImm(P2::ALWAYS));
         MI.addOperand(MachineOperand::CreateImm(P2::NOEFF));
 
+        // remove the dead mark if it's there since it is now used in the next instruction
+        MI.getOperand(0).setIsDead(false);
+        
         Register dst_reg = MI.getOperand(0).getReg();
         II++; // skip forward by 1 instruction
 
         BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::SUBri), dst_reg)
-                                .addReg(dst_reg, RegState::Kill)
-                                .addImm(offset)
-                                .addImm(P2::ALWAYS)
-                                .addImm(P2::NOEFF);
+            .addReg(dst_reg, RegState::Kill)
+            .addImm(offset)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+
     } else if ((op == P2::WRLONGri) || (op == P2::RDLONGri) || (op == P2::WRLONGii)) {
         int imm = 0;
         offset *= -1;
@@ -160,6 +169,7 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
 
         LLVM_DEBUG(MI.dump());
     } else {
+        // rewrite to use ALTS
         // if we decide we need to scavange registers, we need to create an emergency stack slock in frame lowering,
         // then make sure to kill the register after it is used here. For now, we can just use PA as a second stack pointer
         // register for writing to this frame index

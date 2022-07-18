@@ -252,7 +252,7 @@ def : Pat<(urem P2GPR:$src1, P2GPR:$src2), (QUREM P2GPR:$src1, P2GPR:$src2)>;
 // define branch instruction for various compare branches (equal, not equal, etc), they will probably be all subclasses of common branch with different effects stuck to it.
 // define a pattern that matched a compare instruction output inputting to one of the branch instructions for various IR conditional branch patterns
 
-let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
+let DecoderMethod = "DecodeCmpInstruction", isCompare = 1, s_num = 2, d_num = 1 in {
     // don't use the multiclass for this because these don't output to d
     def CMPrr   : P2InstCZIDS<0b0010000, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmp $d, $s">;
     def CMPri   : P2InstCZIDS<0b0010000, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmp $d, $s">;
@@ -269,9 +269,13 @@ let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
 
 def JMPr        : P2InstCZD<0b1101011, 0b000101100, (outs), (ins P2GPR:$d), "jmp $d">;
 
-let DecoderMethod = "DecodeJumpInstruction", isBarrier = 1, isBranch = 1, isTerminator = 1 in {
+let DecoderMethod = "DecodeJumpInstruction", isBranch = 1, isTerminator = 1 in {
     def JMP     : P2InstRA<0b1101100, 0b1, (outs), (ins reljmptarget:$d, P2Implicit:$cmp), "jmp $d">; // relative address jump
     def JMPa    : P2InstRA<0b1101100, 0b0, (outs), (ins absjmptarget:$d, P2Implicit:$cmp), "jmp $d">; // absolute address jump.
+}
+
+let DecoderMethod = "DecodeJumpInstruction", isBarrier = 1, isBranch = 1, isTerminator = 1 in {
+    def JMPuc   : Pseudo<(outs), (ins reljmptarget:$target), "jmp $target">; // unconditional jump
 }
 
 let DecoderMethod = "DecodeTJInstruction", isBranch = 1, isBarrier = 1, isTerminator = 1 in {
@@ -335,8 +339,8 @@ def : Pat<(brcc SETLE, P2GPR:$lhs, imm:$rhs, bb:$target), (JMP bb:$target, (CMPS
 // if (c) branch => jump if not 0
 def : Pat<(brcond P2GPR:$c, bb:$target), (TJNZri P2GPR:$c, bb:$target, always)>;
 
-// unconditional jump
-def : Pat<(br bb:$target), (JMP bb:$target, 1, always)>;
+// unconditional jump. we need to use a pseudo because the unconditional jump doesn't need a compare operand and I don't know how to do that in tablegen
+def : Pat<(br bb:$target), (JMPuc bb:$target)>;
 
 // indirect branch
 def : Pat<(brind P2GPR:$d), (JMPr P2GPR:$d, noeff, always)>;
@@ -499,7 +503,7 @@ let Defs = [PTRA], Uses = [PTRA] in {
     def ADJCALLSTACKDOWN    : Pseudo<(outs), (ins i32imm:$amt, i32imm:$amt2), "ADJCALLSTACKDOWN">;
 }
 
-def : Pat<(P2RET), (RETA always, noeff)>;
+def : Pat<(P2RET), (RETA always, wcz)>; // write cz on return so that the flags are restored to their state before the call
 def : Pat<(P2callseq_start timm:$amt1, timm:$amt2), (ADJCALLSTACKUP i32imm:$amt1, i32imm:$amt2)>;
 def : Pat<(P2callseq_end timm:$amt1, timm:$amt2), (ADJCALLSTACKDOWN i32imm:$amt1, i32imm:$amt2)>;
 

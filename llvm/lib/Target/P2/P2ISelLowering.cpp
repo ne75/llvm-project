@@ -117,6 +117,7 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setTruncStoreAction(MVT::i64, MVT::i16, Expand);
     setTruncStoreAction(MVT::i64, MVT::i32, Expand);
 
+
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i8, Expand);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i8, Expand);
     setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i8, Expand);
@@ -140,9 +141,20 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::CTTZ, MVT::i64, Expand);
     setOperationAction(ISD::CTLZ, MVT::i64, Expand);
     setOperationAction(ISD::CTPOP, MVT::i64, Expand);
+    setOperationAction(ISD::MULHS, MVT::i64, Expand);
     setOperationAction(ISD::MULHU, MVT::i64, Expand);
     setOperationAction(ISD::ROTL, MVT::i64, Expand);
     setOperationAction(ISD::ROTR, MVT::i64, Expand);
+<<<<<<< HEAD
+
+    setOperationAction(ISD::SHL_PARTS, MVT::i64, Expand);
+    setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
+    setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
+
+    setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
+    setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
+=======
+>>>>>>> master
 
     // 64 bit libcalls
     setOperationAction(ISD::SRL, MVT::i64, Custom);
@@ -151,8 +163,10 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::MUL, MVT::i64, LibCall);
     setOperationAction(ISD::SDIV, MVT::i64, LibCall);
     setOperationAction(ISD::SREM, MVT::i64, LibCall);
+    setOperationAction(ISD::SDIVREM, MVT::i64, LibCall);
     setOperationAction(ISD::UDIV, MVT::i64, LibCall);
     setOperationAction(ISD::UREM, MVT::i64, LibCall);
+    setOperationAction(ISD::UDIVREM, MVT::i64, LibCall);
 }
 
 SDValue P2TargetLowering::lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {

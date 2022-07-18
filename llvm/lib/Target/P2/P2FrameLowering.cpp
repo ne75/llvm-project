@@ -174,7 +174,8 @@ bool P2FrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB, MachineB
 
             // write the first block register to ptra, incrementing ptra. if we added setq above, it will write
             // a block of registers.
-            BuildMI(MBB, MI, DL, TII.get(P2::WRLONGri), block_first_reg)
+            BuildMI(MBB, MI, DL, TII.get(P2::WRLONGri))
+                .addReg(block_first_reg)
                 .addImm(P2::PTRA_POSTINC)
                 .addImm(P2::ALWAYS)
                 .setMIFlag(MachineInstr::FrameSetup);
@@ -197,7 +198,8 @@ bool P2FrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB, MachineB
             .setMIFlag(MachineInstr::FrameSetup);
     }
 
-    BuildMI(MBB, MI, DL, TII.get(P2::WRLONGri), block_first_reg)
+    BuildMI(MBB, MI, DL, TII.get(P2::WRLONGri))
+        .addReg(block_first_reg)
         .addImm(P2::PTRA_POSTINC)
         .addImm(P2::ALWAYS)
         .setMIFlag(MachineInstr::FrameSetup);
