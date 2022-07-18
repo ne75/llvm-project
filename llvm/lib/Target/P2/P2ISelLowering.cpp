@@ -142,6 +142,13 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::CTPOP, MVT::i64, Expand);
     setOperationAction(ISD::MULHU, MVT::i64, Expand);
 
+    setOperationAction(ISD::SHL_PARTS, MVT::i64, Expand);
+    setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
+    setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
+
+    setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
+    setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
+
     // 64 bit libcalls
     setOperationAction(ISD::SRL, MVT::i64, Custom);
     setOperationAction(ISD::SRA, MVT::i64, Custom);
