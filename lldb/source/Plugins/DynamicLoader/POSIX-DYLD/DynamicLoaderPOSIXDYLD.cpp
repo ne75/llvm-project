@@ -38,12 +38,7 @@ void DynamicLoaderPOSIXDYLD::Initialize() {
 
 void DynamicLoaderPOSIXDYLD::Terminate() {}
 
-lldb_private::ConstString DynamicLoaderPOSIXDYLD::GetPluginNameStatic() {
-  static ConstString g_name("linux-dyld");
-  return g_name;
-}
-
-const char *DynamicLoaderPOSIXDYLD::GetPluginDescriptionStatic() {
+llvm::StringRef DynamicLoaderPOSIXDYLD::GetPluginDescriptionStatic() {
   return "Dynamic loader plug-in that watches for shared library "
          "loads/unloads in POSIX processes.";
 }
@@ -343,7 +338,7 @@ bool DynamicLoaderPOSIXDYLD::SetRendezvousBreakpoint() {
       dyld_break = target.CreateBreakpoint(
           &containingModules, /*containingSourceFiles=*/nullptr,
           DebugStateCandidates, eFunctionNameTypeFull, eLanguageTypeC,
-          /*offset=*/0,
+          /*m_offset=*/0,
           /*skip_prologue=*/eLazyBoolNo,
           /*internal=*/true,
           /*request_hardware=*/false);
@@ -353,7 +348,7 @@ bool DynamicLoaderPOSIXDYLD::SetRendezvousBreakpoint() {
       dyld_break = target.CreateBreakpoint(
           &containingModules, /*containingSourceFiles=*/nullptr,
           DebugStateCandidates, eFunctionNameTypeFull, eLanguageTypeC,
-          /*offset=*/0,
+          /*m_offset=*/0,
           /*skip_prologue=*/eLazyBoolNo,
           /*internal=*/true,
           /*request_hardware=*/false);

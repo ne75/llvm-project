@@ -123,15 +123,9 @@ BundledRetainClaimRVs::~BundledRetainClaimRVs() {
       // can't be tail calls.
       if (auto *CI = dyn_cast<CallInst>(CB))
         CI->setTailCallKind(CallInst::TCK_NoTail);
-
-      // Remove the ARC intrinsic function operand from the operand bundle.
-      OperandBundleDef OB("clang.arc.attachedcall", None);
-      auto *NewCB = CallBase::Create(CB, OB, CB);
-      CB->replaceAllUsesWith(NewCB);
-      CB->eraseFromParent();
-    } else {
-      EraseInstruction(P.first);
     }
+
+    EraseInstruction(P.first);
   }
 
   RVCalls.clear();

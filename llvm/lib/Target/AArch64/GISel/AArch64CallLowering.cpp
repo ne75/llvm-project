@@ -1112,6 +1112,7 @@ bool AArch64CallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
     return false;
   }
 
+  Info.IsTailCall = CanTailCallOpt;
   if (CanTailCallOpt)
     return lowerTailCall(MIRBuilder, Info, OutArgs);
 
@@ -1126,14 +1127,22 @@ bool AArch64CallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
 
   // Create a temporarily-floating call instruction so we can add the implicit
   // uses of arg registers.
-  unsigned Opc = getCallOpcode(MF, Info.Callee.isReg(), false);
+  const AArch64Subtarget &Subtarget = MF.getSubtarget<AArch64Subtarget>();
+  unsigned Opc = 0;
+  // A call to a returns twice function like setjmp must be followed by a bti
+  // instruction.
+  if (Info.CB && Info.CB->getAttributes().hasFnAttr(Attribute::ReturnsTwice) &&
+      !Subtarget.noBTIAtReturnTwice() &&
+      MF.getInfo<AArch64FunctionInfo>()->branchTargetEnforcement())
+    Opc = AArch64::BLR_BTI;
+  else
+    Opc = getCallOpcode(MF, Info.Callee.isReg(), false);
 
   auto MIB = MIRBuilder.buildInstrNoInsert(Opc);
   MIB.add(Info.Callee);
 
   // Tell the call which registers are clobbered.
   const uint32_t *Mask;
-  const AArch64Subtarget &Subtarget = MF.getSubtarget<AArch64Subtarget>();
   const auto *TRI = Subtarget.getRegisterInfo();
 
   AArch64OutgoingValueAssigner Assigner(AssignFnFixed, AssignFnVarArg,
@@ -1179,7 +1188,7 @@ bool AArch64CallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
     if (!determineAndHandleAssignments(
             UsingReturnedArg ? ReturnedArgHandler : Handler, Assigner, InArgs,
             MIRBuilder, Info.CallConv, Info.IsVarArg,
-            UsingReturnedArg ? OutArgs[0].Regs[0] : Register()))
+            UsingReturnedArg ? makeArrayRef(OutArgs[0].Regs) : None))
       return false;
   }
 

@@ -196,10 +196,8 @@ void FastISel::flushLocalValueMap() {
         EmitStartPt ? MachineBasicBlock::reverse_iterator(EmitStartPt)
                     : FuncInfo.MBB->rend();
     MachineBasicBlock::reverse_iterator RI(LastLocalValue);
-    for (; RI != RE;) {
-      MachineInstr &LocalMI = *RI;
-      // Increment before erasing what it points to.
-      ++RI;
+    for (MachineInstr &LocalMI :
+         llvm::make_early_inc_range(llvm::make_range(RI, RE))) {
       Register DefReg = findLocalRegDef(LocalMI);
       if (!DefReg)
         continue;
@@ -1267,7 +1265,7 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
       // If using instruction referencing, mutate this into a DBG_INSTR_REF,
       // to be later patched up by finalizeDebugInstrRefs. Tack a deref onto
       // the expression, we don't have an "indirect" flag in DBG_INSTR_REF.
-      if (FuncInfo.MF->useDebugInstrRef() && Op->isReg()) {
+      if (UseInstrRefDebugInfo && Op->isReg()) {
         Builder->setDesc(TII.get(TargetOpcode::DBG_INSTR_REF));
         Builder->getOperand(1).ChangeToImmediate(0);
         auto *NewExpr =
@@ -1326,7 +1324,7 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
 
       // If using instruction referencing, mutate this into a DBG_INSTR_REF,
       // to be later patched up by finalizeDebugInstrRefs.
-      if (FuncInfo.MF->useDebugInstrRef()) {
+      if (UseInstrRefDebugInfo) {
         Builder->setDesc(TII.get(TargetOpcode::DBG_INSTR_REF));
         Builder->getOperand(1).ChangeToImmediate(0);
       }
@@ -1777,12 +1775,13 @@ bool FastISel::selectOperator(const User *I, unsigned Opcode) {
     return false;
 
   case Instruction::Call:
-    // On AIX, call lowering uses the DAG-ISEL path currently so that the
+    // On AIX, normal call lowering uses the DAG-ISEL path currently so that the
     // callee of the direct function call instruction will be mapped to the
     // symbol for the function's entry point, which is distinct from the
     // function descriptor symbol. The latter is the symbol whose XCOFF symbol
     // name is the C-linkage name of the source level function.
-    if (TM.getTargetTriple().isOSAIX())
+    // But fast isel still has the ability to do selection for intrinsics.
+    if (TM.getTargetTriple().isOSAIX() && !isa<IntrinsicInst>(I))
       return false;
     return selectCall(I);
 
@@ -1839,8 +1838,7 @@ FastISel::FastISel(FunctionLoweringInfo &FuncInfo,
       TII(*MF->getSubtarget().getInstrInfo()),
       TLI(*MF->getSubtarget().getTargetLowering()),
       TRI(*MF->getSubtarget().getRegisterInfo()), LibInfo(LibInfo),
-      SkipTargetIndependentISel(SkipTargetIndependentISel),
-      LastLocalValue(nullptr), EmitStartPt(nullptr) {}
+      SkipTargetIndependentISel(SkipTargetIndependentISel) {}
 
 FastISel::~FastISel() = default;
 

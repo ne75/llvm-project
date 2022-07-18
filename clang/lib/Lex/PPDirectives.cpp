@@ -818,10 +818,13 @@ Preprocessor::getHeaderToIncludeForDiagnostics(SourceLocation IncLoc,
 Optional<FileEntryRef> Preprocessor::LookupFile(
     SourceLocation FilenameLoc, StringRef Filename, bool isAngled,
     const DirectoryLookup *FromDir, const FileEntry *FromFile,
-    const DirectoryLookup *&CurDir, SmallVectorImpl<char> *SearchPath,
+    const DirectoryLookup **CurDirArg, SmallVectorImpl<char> *SearchPath,
     SmallVectorImpl<char> *RelativePath,
     ModuleMap::KnownHeader *SuggestedModule, bool *IsMapped,
     bool *IsFrameworkFound, bool SkipCache) {
+  const DirectoryLookup *CurDirLocal = nullptr;
+  const DirectoryLookup *&CurDir = CurDirArg ? *CurDirArg : CurDirLocal;
+
   Module *RequestingModule = getModuleForLocation(FilenameLoc);
   bool RequestingModuleIsModuleInterface = !SourceMgr.isInMainFile(FilenameLoc);
 
@@ -877,7 +880,7 @@ Optional<FileEntryRef> Preprocessor::LookupFile(
     const DirectoryLookup *TmpCurDir = CurDir;
     const DirectoryLookup *TmpFromDir = nullptr;
     while (Optional<FileEntryRef> FE = HeaderInfo.LookupFile(
-               Filename, FilenameLoc, isAngled, TmpFromDir, TmpCurDir,
+               Filename, FilenameLoc, isAngled, TmpFromDir, &TmpCurDir,
                Includers, SearchPath, RelativePath, RequestingModule,
                SuggestedModule, /*IsMapped=*/nullptr,
                /*IsFrameworkFound=*/nullptr, SkipCache)) {
@@ -895,7 +898,7 @@ Optional<FileEntryRef> Preprocessor::LookupFile(
 
   // Do a standard file entry lookup.
   Optional<FileEntryRef> FE = HeaderInfo.LookupFile(
-      Filename, FilenameLoc, isAngled, FromDir, CurDir, Includers, SearchPath,
+      Filename, FilenameLoc, isAngled, FromDir, &CurDir, Includers, SearchPath,
       RelativePath, RequestingModule, SuggestedModule, IsMapped,
       IsFrameworkFound, SkipCache, BuildSystemModule);
   if (FE) {
@@ -1451,11 +1454,15 @@ void Preprocessor::HandleDigitDirective(Token &DigitTok) {
       DiscardUntilEndOfDirective();
       return;
     }
-    FilenameID = SourceMgr.getLineTableFilenameID(Literal.GetString());
 
     // If a filename was present, read any flags that are present.
     if (ReadLineMarkerFlags(IsFileEntry, IsFileExit, FileKind, *this))
       return;
+
+    // Exiting to an empty string means pop to the including file, so leave
+    // FilenameID as -1 in that case.
+    if (!(IsFileExit && Literal.GetString().empty()))
+      FilenameID = SourceMgr.getLineTableFilenameID(Literal.GetString());
   }
 
   // Create a line note with this information.
@@ -1823,7 +1830,7 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
 }
 
 Optional<FileEntryRef> Preprocessor::LookupHeaderIncludeOrImport(
-    const DirectoryLookup *&CurDir, StringRef& Filename,
+    const DirectoryLookup **CurDir, StringRef& Filename,
     SourceLocation FilenameLoc, CharSourceRange FilenameRange,
     const Token &FilenameTok, bool &IsFrameworkFound, bool IsImportDecl,
     bool &IsMapped, const DirectoryLookup *LookupFrom,
@@ -2012,23 +2019,19 @@ Preprocessor::ImportAction Preprocessor::HandleHeaderIncludeOrImport(
   SourceLocation FilenameLoc = FilenameTok.getLocation();
   StringRef LookupFilename = Filename;
 
-#ifdef _WIN32
-  llvm::sys::path::Style BackslashStyle = llvm::sys::path::Style::windows;
-#else
   // Normalize slashes when compiling with -fms-extensions on non-Windows. This
   // is unnecessary on Windows since the filesystem there handles backslashes.
   SmallString<128> NormalizedPath;
-  llvm::sys::path::Style BackslashStyle = llvm::sys::path::Style::posix;
-  if (LangOpts.MicrosoftExt) {
+  llvm::sys::path::Style BackslashStyle = llvm::sys::path::Style::native;
+  if (is_style_posix(BackslashStyle) && LangOpts.MicrosoftExt) {
     NormalizedPath = Filename.str();
     llvm::sys::path::native(NormalizedPath);
     LookupFilename = NormalizedPath;
     BackslashStyle = llvm::sys::path::Style::windows;
   }
-#endif
 
   Optional<FileEntryRef> File = LookupHeaderIncludeOrImport(
-      CurDir, Filename, FilenameLoc, FilenameRange, FilenameTok,
+      &CurDir, Filename, FilenameLoc, FilenameRange, FilenameTok,
       IsFrameworkFound, IsImportDecl, IsMapped, LookupFrom, LookupFromFile,
       LookupFilename, RelativePath, SearchPath, SuggestedModule, isAngled);
 
@@ -2055,7 +2058,7 @@ Preprocessor::ImportAction Preprocessor::HandleHeaderIncludeOrImport(
   // include cycle. Don't enter already processed files again as it can lead to
   // reaching the max allowed include depth again.
   if (Action == Enter && HasReachedMaxIncludeDepth && File &&
-      HeaderInfo.getFileInfo(&File->getFileEntry()).NumIncludes)
+      alreadyIncluded(*File))
     Action = IncludeLimitReached;
 
   // Determine whether we should try to import the module for this #include, if
@@ -2143,12 +2146,14 @@ Preprocessor::ImportAction Preprocessor::HandleHeaderIncludeOrImport(
       IsImportDecl ||
       IncludeTok.getIdentifierInfo()->getPPKeywordID() == tok::pp_import;
 
+  bool IsFirstIncludeOfFile = false;
+
   // Ask HeaderInfo if we should enter this #include file.  If not, #including
   // this file will have no effect.
   if (Action == Enter && File &&
-      !HeaderInfo.ShouldEnterIncludeFile(*this, &File->getFileEntry(),
-                                         EnterOnce, getLangOpts().Modules,
-                                         SuggestedModule.getModule())) {
+      !HeaderInfo.ShouldEnterIncludeFile(
+          *this, &File->getFileEntry(), EnterOnce, getLangOpts().Modules,
+          SuggestedModule.getModule(), IsFirstIncludeOfFile)) {
     // Even if we've already preprocessed this header once and know that we
     // don't need to see its contents again, we still need to import it if it's
     // modular because we might not have imported it from this submodule before.
@@ -2340,7 +2345,8 @@ Preprocessor::ImportAction Preprocessor::HandleHeaderIncludeOrImport(
   }
 
   // If all is good, enter the new file!
-  if (EnterSourceFile(FID, CurDir, FilenameTok.getLocation()))
+  if (EnterSourceFile(FID, CurDir, FilenameTok.getLocation(),
+                      IsFirstIncludeOfFile))
     return {ImportAction::None};
 
   // Determine if we're switching to building a new submodule, and which one.

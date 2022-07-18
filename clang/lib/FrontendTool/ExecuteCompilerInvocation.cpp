@@ -57,6 +57,8 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
   case EmitLLVMOnly:           return std::make_unique<EmitLLVMOnlyAction>();
   case EmitCodeGenOnly:        return std::make_unique<EmitCodeGenOnlyAction>();
   case EmitObj:                return std::make_unique<EmitObjAction>();
+  case ExtractAPI:
+    return std::make_unique<ExtractAPIAction>();
   case FixIt:                  return std::make_unique<FixItAction>();
   case GenerateModule:
     return std::make_unique<GenerateModuleFromModuleMapAction>();
@@ -79,7 +81,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
       if (Plugin.getName() == CI.getFrontendOpts().ActionName) {
         std::unique_ptr<PluginASTAction> P(Plugin.instantiate());
         if ((P->getActionType() != PluginASTAction::ReplaceAction &&
-             P->getActionType() != PluginASTAction::Cmdline) ||
+             P->getActionType() != PluginASTAction::CmdlineAfterMainAction) ||
             !P->ParseArgs(
                 CI,
                 CI.getFrontendOpts().PluginArgs[std::string(Plugin.getName())]))

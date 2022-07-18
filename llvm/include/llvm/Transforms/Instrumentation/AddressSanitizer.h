@@ -16,6 +16,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Pass.h"
 #include "llvm/Transforms/Instrumentation/AddressSanitizerOptions.h"
 
 namespace llvm {
@@ -90,17 +91,11 @@ private:
 };
 
 struct AddressSanitizerOptions {
-  AddressSanitizerOptions()
-      : AddressSanitizerOptions(false, false, false,
-                                AsanDetectStackUseAfterReturnMode::Runtime){};
-  AddressSanitizerOptions(bool CompileKernel, bool Recover, bool UseAfterScope,
-                          AsanDetectStackUseAfterReturnMode UseAfterReturn)
-      : CompileKernel(CompileKernel), Recover(Recover),
-        UseAfterScope(UseAfterScope), UseAfterReturn(UseAfterReturn){};
-  bool CompileKernel;
-  bool Recover;
-  bool UseAfterScope;
-  AsanDetectStackUseAfterReturnMode UseAfterReturn;
+  bool CompileKernel = false;
+  bool Recover = false;
+  bool UseAfterScope = false;
+  AsanDetectStackUseAfterReturnMode UseAfterReturn =
+      AsanDetectStackUseAfterReturnMode::Runtime;
 };
 
 /// Public interface to the address sanitizer pass for instrumenting code to
@@ -147,7 +142,7 @@ private:
   AsanDtorKind DestructorKind;
 };
 
-// Insert AddressSanitizer (address sanity checking) instrumentation
+// Insert AddressSanitizer (address basic correctness checking) instrumentation
 FunctionPass *createAddressSanitizerFunctionPass(
     bool CompileKernel = false, bool Recover = false,
     bool UseAfterScope = false,

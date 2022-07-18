@@ -297,7 +297,7 @@ TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
 #ifndef NDEBUG
   dbgs() << "If a target marks an instruction with "
           "'usesCustomInserter', it must implement "
-          "TargetLowering::EmitInstrWithCustomInserter!";
+          "TargetLowering::EmitInstrWithCustomInserter!\n";
 #endif
   llvm_unreachable(nullptr);
 }
@@ -319,7 +319,7 @@ SelectionDAGISel::SelectionDAGISel(TargetMachine &tm, CodeGenOpt::Level OL)
       CurDAG(new SelectionDAG(tm, OL)),
       SDB(std::make_unique<SelectionDAGBuilder>(*CurDAG, *FuncInfo, *SwiftError,
                                                 OL)),
-      AA(), GFI(), OptLevel(OL), DAGSize(0) {
+      OptLevel(OL) {
   initializeGCModuleInfoPass(*PassRegistry::getPassRegistry());
   initializeBranchProbabilityInfoWrapperPassPass(
       *PassRegistry::getPassRegistry());
@@ -424,6 +424,11 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
 
   const Function &Fn = mf.getFunction();
   MF = &mf;
+
+  // Decide what flavour of variable location debug-info will be used, before
+  // we change the optimisation level.
+  UseInstrRefDebugInfo = mf.useDebugInstrRef();
+  CurDAG->useInstrRefDebugInfo(UseInstrRefDebugInfo);
 
   // Reset the target options before resetting the optimization
   // level below.
@@ -654,7 +659,8 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
 
   // For debug-info, in instruction referencing mode, we need to perform some
   // post-isel maintenence.
-  MF->finalizeDebugInstrRefs();
+  if (UseInstrRefDebugInfo)
+    MF->finalizeDebugInstrRefs();
 
   // Determine if there are any calls in this machine function.
   MachineFrameInfo &MFI = MF->getFrameInfo();
@@ -1380,6 +1386,8 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
   if (TM.Options.EnableFastISel) {
     LLVM_DEBUG(dbgs() << "Enabling fast-isel\n");
     FastIS = TLI->createFastISel(*FuncInfo, LibInfo);
+    if (FastIS)
+      FastIS->useInstrRefDebugInfo(UseInstrRefDebugInfo);
   }
 
   ReversePostOrderTraversal<const Function*> RPOT(&Fn);
@@ -1784,27 +1792,25 @@ SelectionDAGISel::FinishBasicBlock() {
     }
 
     // Update PHI Nodes
-    for (unsigned pi = 0, pe = FuncInfo->PHINodesToUpdate.size();
-         pi != pe; ++pi) {
-      MachineInstrBuilder PHI(*MF, FuncInfo->PHINodesToUpdate[pi].first);
+    for (const std::pair<MachineInstr *, unsigned> &P :
+         FuncInfo->PHINodesToUpdate) {
+      MachineInstrBuilder PHI(*MF, P.first);
       MachineBasicBlock *PHIBB = PHI->getParent();
       assert(PHI->isPHI() &&
              "This is not a machine PHI node that we are updating!");
       // This is "default" BB. We have two jumps to it. From "header" BB and
       // from last "case" BB, unless the latter was skipped.
       if (PHIBB == BTB.Default) {
-        PHI.addReg(FuncInfo->PHINodesToUpdate[pi].second).addMBB(BTB.Parent);
+        PHI.addReg(P.second).addMBB(BTB.Parent);
         if (!BTB.ContiguousRange) {
-          PHI.addReg(FuncInfo->PHINodesToUpdate[pi].second)
-              .addMBB(BTB.Cases.back().ThisBB);
+          PHI.addReg(P.second).addMBB(BTB.Cases.back().ThisBB);
          }
       }
       // One of "cases" BB.
-      for (unsigned j = 0, ej = BTB.Cases.size();
-           j != ej; ++j) {
-        MachineBasicBlock* cBB = BTB.Cases[j].ThisBB;
+      for (const SwitchCG::BitTestCase &BT : BTB.Cases) {
+        MachineBasicBlock* cBB = BT.ThisBB;
         if (cBB->isSuccessor(PHIBB))
-          PHI.addReg(FuncInfo->PHINodesToUpdate[pi].second).addMBB(cBB);
+          PHI.addReg(P.second).addMBB(cBB);
       }
     }
   }

@@ -1,5 +1,9 @@
 # Get sources
 
+enable_language(C CXX ASM)
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 set(LIBUNWIND_CXX_SOURCES
     libunwind.cpp
     Unwind-EHABI.cpp
@@ -16,19 +20,11 @@ set(LIBUNWIND_C_SOURCES
     UnwindLevel1-gcc-ext.c
     Unwind-sjlj.c
     )
-set_source_files_properties(${LIBUNWIND_C_SOURCES}
-                            PROPERTIES
-                              COMPILE_FLAGS "-std=c99")
 
 set(LIBUNWIND_ASM_SOURCES
     UnwindRegistersRestore.S
     UnwindRegistersSave.S
     )
-
-# See add_asm_sources() in compiler-rt for explanation of this workaround.
-if((APPLE AND CMAKE_VERSION VERSION_LESS 3.19) OR (MINGW AND CMAKE_VERSION VERSION_LESS 3.17))
-  set_source_files_properties(${LIBUNWIND_ASM_SOURCES} PROPERTIES LANGUAGE C)
-endif()
 
 set(LIBUNWIND_HEADERS
     AddressSpace.hpp
@@ -63,6 +59,44 @@ if (MSVC_IDE)
   source_group("Header Files" FILES ${LIBUNWIND_HEADERS})
 endif()
 
+if (RUST_SGX)
+    # Compile Flags
+    add_definitions(-DRUST_SGX)
+    add_definitions(-D__NO_STRING_INLINES)
+    add_definitions(-D__NO_MATH_INLINES)
+    add_definitions(-D_LIBUNWIND_IS_BAREMETAL)
+    # Can't use add_definitions because CMake will reorder these arguments
+    list(APPEND LIBUNWIND_COMPILE_FLAGS -U_FORTIFY_SOURCE)
+    list(APPEND LIBUNWIND_COMPILE_FLAGS -D_FORTIFY_SOURCE=0)
+
+    list(APPEND LIBUNWIND_COMPILE_FLAGS -fno-stack-protector)
+    list(APPEND LIBUNWIND_COMPILE_FLAGS -ffreestanding)
+    list(APPEND LIBUNWIND_COMPILE_FLAGS -fexceptions)
+    # Avoid too new relocation types being emitted, which might prevent linking
+    # on older platforms.
+    #
+    # See https://github.com/rust-lang/rust/issues/34978
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+        list(APPEND LIBUNWIND_COMPILE_FLAGS -Wa,-mrelax-relocations=no)
+    else()
+        list(APPEND LIBUNWIND_COMPILE_FLAGS)
+    endif()
+
+    # Sources
+    list(APPEND LIBUNWIND_HEADERS   UnwindRustSgx.h)
+    list(APPEND LIBUNWIND_C_SOURCES UnwindRustSgx.c)
+endif()
+
+
+set_source_files_properties(${LIBUNWIND_C_SOURCES}
+                            PROPERTIES
+                              COMPILE_FLAGS "-std=c99")
+
+# See add_asm_sources() in compiler-rt for explanation of this workaround.
+if((APPLE AND CMAKE_VERSION VERSION_LESS 3.19) OR (MINGW AND CMAKE_VERSION VERSION_LESS 3.17))
+  set_source_files_properties(${LIBUNWIND_ASM_SOURCES} PROPERTIES LANGUAGE C)
+endif()
+
 set(LIBUNWIND_SOURCES
     ${LIBUNWIND_CXX_SOURCES}
     ${LIBUNWIND_C_SOURCES}
@@ -77,12 +111,13 @@ else()
   add_library_flags_if(LIBUNWIND_HAS_GCC_LIB gcc)
 endif()
 add_library_flags_if(LIBUNWIND_HAS_DL_LIB dl)
-if (LIBUNWIND_ENABLE_THREADS)
+if (LIBUNWIND_ENABLE_THREADS AND (NOT RUST_SGX))
   add_library_flags_if(LIBUNWIND_HAS_PTHREAD_LIB pthread)
   add_compile_flags_if(LIBUNWIND_WEAK_PTHREAD_LIB -DLIBUNWIND_USE_WEAK_PTHREAD=1)
 endif()
 
 # Setup flags.
+add_link_flags_if(LIBUNWIND_SUPPORTS_UNWINDLIB_NONE_FLAG --unwindlib=none)
 if (LIBUNWIND_SUPPORTS_NOSTDLIBXX_FLAG)
   add_link_flags_if_supported(-nostdlib++)
 else()
@@ -132,7 +167,8 @@ if (LIBUNWIND_ENABLE_SHARED)
   else()
     target_compile_options(unwind_shared PRIVATE -fno-rtti)
   endif()
-  target_link_libraries(unwind_shared PRIVATE ${LIBUNWIND_LIBRARIES})
+  target_link_libraries(unwind_shared PRIVATE ${LIBUNWIND_LIBRARIES}
+                                      PRIVATE unwind-headers)
   set_target_properties(unwind_shared
     PROPERTIES
       CXX_EXTENSIONS OFF
@@ -144,7 +180,6 @@ if (LIBUNWIND_ENABLE_SHARED)
       OUTPUT_NAME "unwind"
       VERSION "1.0"
       SOVERSION "1"
-      POSITION_INDEPENDENT_CODE ON
   )
   list(APPEND LIBUNWIND_BUILD_TARGETS "unwind_shared")
   if (LIBUNWIND_INSTALL_SHARED_LIBRARY)
@@ -160,7 +195,8 @@ if (LIBUNWIND_ENABLE_STATIC)
   else()
     target_compile_options(unwind_static PRIVATE -fno-rtti)
   endif()
-  target_link_libraries(unwind_static PRIVATE ${LIBUNWIND_LIBRARIES})
+  target_link_libraries(unwind_static PRIVATE ${LIBUNWIND_LIBRARIES}
+                                      PRIVATE unwind-headers)
   set_target_properties(unwind_static
     PROPERTIES
       CXX_EXTENSIONS OFF
@@ -170,7 +206,6 @@ if (LIBUNWIND_ENABLE_STATIC)
       LINK_FLAGS "${LIBUNWIND_LINK_FLAGS}"
       LINKER_LANGUAGE C
       OUTPUT_NAME "unwind"
-      POSITION_INDEPENDENT_CODE ON
   )
 
   if(LIBUNWIND_HIDE_SYMBOLS)
@@ -208,4 +243,8 @@ if (NOT CMAKE_CONFIGURATION_TYPES AND LIBUNWIND_INSTALL_LIBRARY)
             -DCMAKE_INSTALL_COMPONENT=unwind
             -DCMAKE_INSTALL_DO_STRIP=1
             -P "${LIBUNWIND_BINARY_DIR}/cmake_install.cmake")
+  if(LIBUNWIND_INSTALL_HEADERS)
+    add_dependencies(install-unwind install-unwind-headers)
+    add_dependencies(install-unwind-stripped install-unwind-headers-stripped)
+  endif()
 endif()

@@ -1,15 +1,6 @@
 # REQUIRES: target={{x86_64-.+-linux-gnu}}
-# RUN: %{build}
+# RUN: %{build} -no-pie
 # RUN: %{run}
-
-// TODO: Investigate these failures
-// XFAIL: asan, tsan, ubsan
-
-// TODO: Investigate this failure
-// XFAIL: 32bits-on-64bits
-
-# TODO: Investigate this failure on GCC.
-# XFAIL: gcc
 
 # The following assembly is a translation of this code:
 #

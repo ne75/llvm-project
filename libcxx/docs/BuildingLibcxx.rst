@@ -218,12 +218,6 @@ libc++ specific options
 
   Build libc++ with assertions enabled.
 
-.. option:: LIBCXX_BUILD_32_BITS:BOOL
-
-  **Default**: ``OFF``
-
-  Build libc++ as a 32 bit library. Also see `LLVM_BUILD_32_BITS`.
-
 .. option:: LIBCXX_ENABLE_SHARED:BOOL
 
   **Default**: ``ON``
@@ -324,7 +318,7 @@ ABI Library Specific Options
 
 .. option:: LIBCXX_CXX_ABI:STRING
 
-  **Values**: ``none``, ``libcxxabi``, ``libcxxrt``, ``libstdc++``, ``libsupc++``.
+  **Values**: ``none``, ``libcxxabi``, ``system-libcxxabi``, ``libcxxrt``, ``libstdc++``, ``libsupc++``.
 
   Select the ABI library to build libc++ against.
 
@@ -529,8 +523,8 @@ We can now run CMake:
 
 .. code-block:: bash
 
-  $ cmake -G Ninja -S llvm -B build           \
-    -DLLVM_ENABLE_PROJECTS="libcxx"           \
+  $ cmake -G Ninja -S runtimes -B build       \
+    -DLLVM_ENABLE_RUNTIMES="libcxx"           \
     -DLIBCXX_CXX_ABI=libstdc++                \
     -DLIBCXX_CXX_ABI_INCLUDE_PATHS="/usr/include/c++/4.7/;/usr/include/c++/4.7/x86_64-linux-gnu/"
   $ ninja -C build install-cxx
@@ -555,8 +549,8 @@ We can now run CMake like:
 
 .. code-block:: bash
 
-  $ cmake -G Ninja -S llvm -B build                                   \
-          -DLLVM_ENABLE_PROJECTS="libcxx"                             \
+  $ cmake -G Ninja -S runtimes -B build                               \
+          -DLLVM_ENABLE_RUNTIMES="libcxx"                             \
           -DLIBCXX_CXX_ABI=libcxxrt                                   \
           -DLIBCXX_CXX_ABI_INCLUDE_PATHS=path/to/libcxxrt-sources/src
   $ ninja -C build install-cxx

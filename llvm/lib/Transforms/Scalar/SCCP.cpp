@@ -101,8 +101,7 @@ static bool tryToReplaceWithConstant(SCCPSolver &Solver, Value *V) {
   Constant *Const = nullptr;
   if (V->getType()->isStructTy()) {
     std::vector<ValueLatticeElement> IVs = Solver.getStructLatticeValueFor(V);
-    if (any_of(IVs,
-               [](const ValueLatticeElement &LV) { return isOverdefined(LV); }))
+    if (llvm::any_of(IVs, isOverdefined))
       return false;
     std::vector<Constant *> ConstVals;
     auto *ST = cast<StructType>(V->getType());
@@ -343,7 +342,8 @@ static void findReturnsToZap(Function &F,
 }
 
 static bool removeNonFeasibleEdges(const SCCPSolver &Solver, BasicBlock *BB,
-                                   DomTreeUpdater &DTU) {
+                                   DomTreeUpdater &DTU,
+                                   BasicBlock *&NewUnreachableBB) {
   SmallPtrSet<BasicBlock *, 8> FeasibleSuccessors;
   bool HasNonFeasibleEdges = false;
   for (BasicBlock *Succ : successors(BB)) {
@@ -386,6 +386,23 @@ static bool removeNonFeasibleEdges(const SCCPSolver &Solver, BasicBlock *BB,
   } else if (FeasibleSuccessors.size() > 1) {
     SwitchInstProfUpdateWrapper SI(*cast<SwitchInst>(TI));
     SmallVector<DominatorTree::UpdateType, 8> Updates;
+
+    // If the default destination is unfeasible it will never be taken. Replace
+    // it with a new block with a single Unreachable instruction.
+    BasicBlock *DefaultDest = SI->getDefaultDest();
+    if (!FeasibleSuccessors.contains(DefaultDest)) {
+      if (!NewUnreachableBB) {
+        NewUnreachableBB =
+            BasicBlock::Create(DefaultDest->getContext(), "default.unreachable",
+                               DefaultDest->getParent(), DefaultDest);
+        new UnreachableInst(DefaultDest->getContext(), NewUnreachableBB);
+      }
+
+      SI->setDefaultDest(NewUnreachableBB);
+      Updates.push_back({DominatorTree::Delete, BB, DefaultDest});
+      Updates.push_back({DominatorTree::Insert, BB, NewUnreachableBB});
+    }
+
     for (auto CI = SI->case_begin(); CI != SI->case_end();) {
       if (FeasibleSuccessors.contains(CI->getCaseSuccessor())) {
         ++CI;
@@ -487,7 +504,7 @@ bool llvm::runIPSCCP(
       // inaccessiblemem_or_argmemonly attributes do not hold any longer. Remove
       // them from both the function and callsites.
       if (ReplacedPointerArg) {
-        AttrBuilder AttributesToRemove;
+        AttributeMask AttributesToRemove;
         AttributesToRemove.addAttribute(Attribute::ArgMemOnly);
         AttributesToRemove.addAttribute(Attribute::InaccessibleMemOrArgMemOnly);
         F.removeFnAttrs(AttributesToRemove);
@@ -533,8 +550,9 @@ bool llvm::runIPSCCP(
       NumInstRemoved += changeToUnreachable(F.front().getFirstNonPHI(),
                                             /*PreserveLCSSA=*/false, &DTU);
 
+    BasicBlock *NewUnreachableBB = nullptr;
     for (BasicBlock &BB : F)
-      MadeChanges |= removeNonFeasibleEdges(Solver, &BB, DTU);
+      MadeChanges |= removeNonFeasibleEdges(Solver, &BB, DTU, NewUnreachableBB);
 
     for (BasicBlock *DeadBB : BlocksToErase)
       DTU.deleteBB(DeadBB);

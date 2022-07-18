@@ -52,6 +52,8 @@
 using namespace clang;
 using namespace llvm;
 
+#define DEBUG_TYPE "codegenaction"
+
 namespace clang {
   class BackendConsumer;
   class ClangDiagnosticHandler final : public DiagnosticHandler {
@@ -352,6 +354,7 @@ namespace clang {
       }
 
       if (CodeGenOpts.ClearASTBeforeBackend) {
+        LLVM_DEBUG(llvm::dbgs() << "Clearing AST...\n");
         // Access to the AST is no longer available after this.
         // Other things that the ASTContext manages are still available, e.g.
         // the SourceManager. It'd be nice if we could separate out all the
@@ -568,7 +571,6 @@ void BackendConsumer::SrcMgrDiagHandler(const llvm::DiagnosticInfoSrcMgr &DI) {
   // If Loc is invalid, we still need to report the issue, it just gets no
   // location info.
   Diags.Report(Loc, DiagID).AddString(Message);
-  return;
 }
 
 bool
@@ -1132,6 +1134,7 @@ void CodeGenAction::ExecuteAction() {
     TheModule->setTargetTriple(TargetOpts.Triple);
   }
 
+  EmbedObject(TheModule.get(), CodeGenOpts, Diagnostics);
   EmbedBitcode(TheModule.get(), CodeGenOpts, *MainFile);
 
   LLVMContext &Ctx = TheModule->getContext();

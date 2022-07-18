@@ -137,7 +137,7 @@ EmulateInstructionMIPS::EmulateInstructionMIPS(
     break;
   }
 
-  std::string features = "";
+  std::string features;
   uint32_t arch_flags = arch.GetFlags();
   if (arch_flags & ArchSpec::eMIPSAse_msa)
     features += "+msa,";
@@ -193,12 +193,7 @@ void EmulateInstructionMIPS::Terminate() {
   PluginManager::UnregisterPlugin(CreateInstance);
 }
 
-ConstString EmulateInstructionMIPS::GetPluginNameStatic() {
-  ConstString g_plugin_name("lldb.emulate-instruction.mips32");
-  return g_plugin_name;
-}
-
-const char *EmulateInstructionMIPS::GetPluginDescriptionStatic() {
+llvm::StringRef EmulateInstructionMIPS::GetPluginDescriptionStatic() {
   return "Emulate instructions for the MIPS32 architecture.";
 }
 

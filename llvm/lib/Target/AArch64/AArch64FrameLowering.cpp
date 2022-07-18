@@ -547,7 +547,7 @@ void AArch64FrameLowering::emitCalleeSavedFrameMoves(
     return;
 
   for (const auto &Info : CSI) {
-    unsigned Reg = Info.getReg();
+    Register Reg = Info.getReg();
 
     // Not all unwinders may know about SVE registers, so assume the lowest
     // common demoninator.
@@ -2285,7 +2285,7 @@ static void computeCalleeSaveRegisterPairs(
   // MachO's compact unwind format relies on all registers being stored in
   // pairs.
   assert((!produceCompactUnwindFrame(MF) ||
-          CC == CallingConv::PreserveMost ||
+          CC == CallingConv::PreserveMost || CC == CallingConv::CXX_FAST_TLS ||
           (Count & 1) == 0) &&
          "Odd number of callee-saved regs to spill!");
   int ByteOffset = AFI->getCalleeSavedStackSize();
@@ -2324,7 +2324,7 @@ static void computeCalleeSaveRegisterPairs(
 
     // Add the next reg to the pair if it is in the same register class.
     if (unsigned(i + RegInc) < Count) {
-      unsigned NextReg = CSI[i + RegInc].getReg();
+      Register NextReg = CSI[i + RegInc].getReg();
       bool IsFirst = i == FirstReg;
       switch (RPI.Type) {
       case RegPairInfo::GPR:
@@ -2380,7 +2380,7 @@ static void computeCalleeSaveRegisterPairs(
     // MachO's compact unwind format relies on all registers being stored in
     // adjacent register pairs.
     assert((!produceCompactUnwindFrame(MF) ||
-            CC == CallingConv::PreserveMost ||
+            CC == CallingConv::PreserveMost || CC == CallingConv::CXX_FAST_TLS ||
             (RPI.isPaired() &&
              ((RPI.Reg1 == AArch64::LR && RPI.Reg2 == AArch64::FP) ||
               RPI.Reg1 + 1 == RPI.Reg2))) &&
@@ -2529,9 +2529,7 @@ bool AArch64FrameLowering::spillCalleeSavedRegisters(
     }
     return true;
   }
-  for (auto RPII = RegPairs.rbegin(), RPIE = RegPairs.rend(); RPII != RPIE;
-       ++RPII) {
-    RegPairInfo RPI = *RPII;
+  for (const RegPairInfo &RPI : llvm::reverse(RegPairs)) {
     unsigned Reg1 = RPI.Reg1;
     unsigned Reg2 = RPI.Reg2;
     unsigned StrOpc;
@@ -3036,9 +3034,20 @@ static int64_t determineSVEStackObjectOffsets(MachineFrameInfo &MFI,
 
   // Create a buffer of SVE objects to allocate and sort it.
   SmallVector<int, 8> ObjectsToAllocate;
+  // If we have a stack protector, and we've previously decided that we have SVE
+  // objects on the stack and thus need it to go in the SVE stack area, then it
+  // needs to go first.
+  int StackProtectorFI = -1;
+  if (MFI.hasStackProtectorIndex()) {
+    StackProtectorFI = MFI.getStackProtectorIndex();
+    if (MFI.getStackID(StackProtectorFI) == TargetStackID::ScalableVector)
+      ObjectsToAllocate.push_back(StackProtectorFI);
+  }
   for (int I = 0, E = MFI.getObjectIndexEnd(); I != E; ++I) {
     unsigned StackID = MFI.getStackID(I);
     if (StackID != TargetStackID::ScalableVector)
+      continue;
+    if (I == StackProtectorFI)
       continue;
     if (MaxCSFrameIndex >= I && I >= MinCSFrameIndex)
       continue;
@@ -3119,7 +3128,7 @@ void AArch64FrameLowering::processFunctionBeforeFrameFinalized(
   DebugLoc DL;
   RS->enterBasicBlockEnd(MBB);
   RS->backward(std::prev(MBBI));
-  unsigned DstReg = RS->FindUnusedReg(&AArch64::GPR64commonRegClass);
+  Register DstReg = RS->FindUnusedReg(&AArch64::GPR64commonRegClass);
   assert(DstReg && "There must be a free register after frame setup");
   BuildMI(MBB, MBBI, DL, TII.get(AArch64::MOVi64imm), DstReg).addImm(-2);
   BuildMI(MBB, MBBI, DL, TII.get(AArch64::STURXi))
@@ -3532,7 +3541,14 @@ StackOffset AArch64FrameLowering::getFrameIndexReferencePreferSP(
     return StackOffset::getFixed(MFI.getObjectOffset(FI));
   }
 
-  return getFrameIndexReference(MF, FI, FrameReg);
+  // Go to common code if we cannot provide sp + offset.
+  if (MFI.hasVarSizedObjects() ||
+      MF.getInfo<AArch64FunctionInfo>()->getStackSizeSVE() ||
+      MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF))
+    return getFrameIndexReference(MF, FI, FrameReg);
+
+  FrameReg = AArch64::SP;
+  return getStackOffset(MF, MFI.getObjectOffset(FI));
 }
 
 /// The parent frame offset (aka dispFrame) is only used on X86_64 to retrieve

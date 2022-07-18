@@ -349,3 +349,5 @@ def : MergeRule<"setAND<MustProgressAttr>">;
 // P2 specific attributes
 def Cogtext : EnumAttr<"cogtext", [FnAttr]>;
 def Cogmain : EnumAttr<"cogmain", [FnAttr]>;
+// Target dependent attributes
+include "llvm/IR/AttributesAMDGPU.td"

@@ -141,12 +141,6 @@ class HexagonAsmParser : public MCTargetAsmParser {
   int processInstruction(MCInst &Inst, OperandVector const &Operands,
                          SMLoc IDLoc);
 
-  // Check if we have an assembler and, if so, set the ELF e_header flags.
-  void chksetELFHeaderEFlags(unsigned flags) {
-    if (getAssembler())
-      getAssembler()->setELFHeaderEFlags(flags);
-  }
-
   unsigned matchRegister(StringRef Name);
 
 /// @name Auto-generated Match Functions
@@ -211,18 +205,13 @@ struct HexagonOperand : public MCParsedAsmOperand {
     const MCExpr *Val;
   };
 
-  struct InstTy {
-    OperandVector *SubInsts;
-  };
-
   union {
     struct TokTy Tok;
     struct RegTy Reg;
     struct ImmTy Imm;
   };
 
-  HexagonOperand(KindTy K, MCContext &Context)
-      : MCParsedAsmOperand(), Kind(K), Context(Context) {}
+  HexagonOperand(KindTy K, MCContext &Context) : Kind(K), Context(Context) {}
 
 public:
   HexagonOperand(const HexagonOperand &o)
