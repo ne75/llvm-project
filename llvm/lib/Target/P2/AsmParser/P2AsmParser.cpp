@@ -238,6 +238,81 @@ namespace {
             const MCConstantExpr *eff_expr = MCConstantExpr::create(0, getContext());
             return P2Operand::CreateImm(eff_expr, SMLoc(), SMLoc());
         };
+
+        // This is very similar code to the P2InsertAug pass, but for MCInst instead of 
+        // MachineInst. Maybe there's some refactoring we can do to make it better.
+
+        /**
+         * Create an aug MCInst with the give parameters.
+         * flags in MI must be set
+         */
+        void createAugInst(MCInst &Aug, int type, int value, int condition) const {
+            assert (type == 1 || type == 2 && "Unknown aug type");
+
+            unsigned opc;
+
+            if (type == 1) {
+                opc = P2::AUGS;
+            } else {
+                opc = P2::AUGD;
+            }
+            
+            auto MO_imm = MCOperand::createImm(value);
+            auto MO_cond = MCOperand::createImm(condition);
+
+            Aug.setOpcode(opc);
+            Aug.addOperand(MO_imm);
+            Aug.addOperand(MO_cond);
+        }
+
+        /**
+         * Create an aug MCInst for the given operand in MI
+         * flags in MI must be set
+         */
+        void createAugInst(MCInst &Aug, MCInst &MI, int op_num) const {
+            // 1. Figure out if we need augd or augs
+            assert(canAug(MI) && "Can't create aug for instruction!\n");
+            int aug_type = 0; // 0 = none, 1 = augs, 2 = augd
+
+            bool has_d = P2::hasDField(MI.getFlags());
+            bool has_s = P2::hasSField(MI.getFlags());
+            int s_num = P2::getSNum(MI.getFlags());
+            int d_num = P2::getDNum(MI.getFlags());
+
+            LLVM_DEBUG(errs() << "has_d = " << has_d << " has_s = " << has_s << " s_num = " << s_num << " d_num = " << d_num << "\n");
+
+            if (has_d && op_num == d_num) {
+                aug_type = 2;
+            } else if (has_s && op_num == s_num) {
+                aug_type = 1;
+            }
+
+            LLVM_DEBUG(errs() << "aug_type = " << aug_type << "\n");
+            
+            // 2. create the MCInst
+            const MCOperand &MO = MI.getOperand(op_num);
+            int aug_i = (MO.getImm() >> 9) & 0x7fffff;
+
+            createAugInst(Aug, aug_type, aug_i, P2::getCondition(MI));
+        }
+
+        /**
+         * can the MI be aug'd? flags must be set.
+         */
+        bool canAug(const MCInst &MI) const {
+            auto type = P2::getInstructionForm(MI.getFlags());
+
+            if (type == P2::P2InstN || 
+                type == P2::P2InstWRA ||
+                type == P2::P2InstWRA ||
+                type == P2::P2InstRA ||
+                type == P2::P2InstD || 
+                type == P2::P2InstCZ ||
+                type == P2::P2InstCZD | 
+                type == 0) return false;
+
+            return true;
+        }
     };
 }
 
@@ -266,7 +341,26 @@ bool P2AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode, Operand
             break;
         case Match_Success: {
             Inst.setLoc(IDLoc);
-            LLVM_DEBUG(Inst.dump());
+
+            Inst.setFlags(MII.get(Inst.getOpcode()).TSFlags);
+            // insert augs/augd as needed
+
+            if (canAug(Inst)) {
+                for (unsigned i = 0; i < Inst.getNumOperands(); i++) {
+                    auto MO = Inst.getOperand(i);
+
+                    if (MO.isImm()) {
+                        auto imm = MO.getImm();
+
+                        if (!isUInt<9>(imm)) {
+                            MCInst AugInst;
+                            createAugInst(AugInst, Inst, i);
+                            MO.setImm(imm & 0x1ff);
+                            Out.emitInstruction(AugInst, getSTI());
+                        }
+                    }
+                }
+            }
 
             Out.emitInstruction(Inst, getSTI());
             return false;
@@ -583,7 +677,7 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
             SMLoc S = Parser.getTok().getLoc();
             Parser.Lex(); // eat the #
 
-            // is there a / for an absolute address? 
+            // is there a \ for an absolute address? 
             if (Parser.getTok().getKind() == AsmToken::BackSlash) {
                 Parser.Lex(); // eat the backslash
                 const MCExpr *IdVal;
@@ -595,6 +689,9 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
                 Operands.push_back(P2Operand::CreateAbsAddr(IdVal, S, E));
                 return false;
             } else {
+                if (Parser.getTok().getKind() == AsmToken::Hash)
+                    Parser.Lex(); // we might have an extra # for long immediates, remove it.
+
                 const MCExpr *IdVal;
                 S = Parser.getTok().getLoc();
                 if (getParser().parseExpression(IdVal))

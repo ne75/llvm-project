@@ -1,0 +1,1 @@
+; RUN: llc < %s -march=p2 | FileCheck %s
