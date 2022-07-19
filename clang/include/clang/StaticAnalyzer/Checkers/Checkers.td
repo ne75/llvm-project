@@ -552,7 +552,7 @@ def StdCLibraryFunctionArgsChecker : Checker<"StdCLibraryFunctionArgs">,
            "or is EOF.">,
   Dependencies<[StdCLibraryFunctionsChecker]>,
   WeakDependencies<[CallAndMessageChecker, NonNullParamChecker, StreamChecker]>,
-  Documentation<NotDocumented>;
+  Documentation<HasAlphaDocumentation>;
 
 } // end "alpha.unix"
 
@@ -602,6 +602,10 @@ def SmartPtrModeling: Checker<"SmartPtrModeling">,
                   Hide>,
   ]>,
   Hidden;
+
+def StringChecker: Checker<"StringChecker">,
+  HelpText<"Checks C++ std::string bugs">,
+  Documentation<HasDocumentation>;
 
 def MoveChecker: Checker<"Move">,
   HelpText<"Find use-after-move bugs in C++">,

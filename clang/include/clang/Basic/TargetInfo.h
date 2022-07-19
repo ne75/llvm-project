@@ -47,9 +47,6 @@ class DiagnosticsEngine;
 class LangOptions;
 class CodeGenOptions;
 class MacroBuilder;
-class QualType;
-class SourceLocation;
-class SourceManager;
 
 namespace Builtin { struct Info; }
 
@@ -203,6 +200,8 @@ protected:
   bool HasFloat16;
   bool HasBFloat16;
   bool HasIbm128;
+  bool HasLongDouble;
+  bool HasFPReturn;
   bool HasStrictFP;
 
   unsigned char MaxAtomicPromoteWidth, MaxAtomicInlineWidth;
@@ -213,6 +212,7 @@ protected:
   unsigned char RegParmMax, SSERegParmMax;
   TargetCXXABI TheCXXABI;
   const LangASMap *AddrSpaceMap;
+  unsigned ProgramAddrSpace;
 
   mutable StringRef PlatformName;
   mutable VersionTuple PlatformMinVersion;
@@ -580,10 +580,25 @@ public:
     return (getPointerWidth(0) >= 64) || getTargetOpts().ForceEnableInt128;
   } // FIXME
 
-  /// Determine whether the _ExtInt type is supported on this target. This
+  /// Determine whether the _BitInt type is supported on this target. This
   /// limitation is put into place for ABI reasons.
-  virtual bool hasExtIntType() const {
+  /// FIXME: _BitInt is a required type in C23, so there's not much utility in
+  /// asking whether the target supported it or not; I think this should be
+  /// removed once backends have been alerted to the type and have had the
+  /// chance to do implementation work if needed.
+  virtual bool hasBitIntType() const {
     return false;
+  }
+
+  // Different targets may support a different maximum width for the _BitInt
+  // type, depending on what operations are supported.
+  virtual size_t getMaxBitIntWidth() const {
+    // FIXME: this value should be llvm::IntegerType::MAX_INT_BITS, which is
+    // maximum bit width that LLVM claims its IR can support. However, most
+    // backends currently have a bug where they only support division
+    // operations on types that are <= 128 bits and crash otherwise. We're
+    // setting the max supported value to 128 to be conservative.
+    return 128;
   }
 
   /// Determine whether _Float16 is supported on this target.
@@ -600,6 +615,13 @@ public:
 
   /// Determine whether the __ibm128 type is supported on this target.
   virtual bool hasIbm128Type() const { return HasIbm128; }
+
+  /// Determine whether the long double type is supported on this target.
+  virtual bool hasLongDoubleType() const { return HasLongDouble; }
+
+  /// Determine whether return of a floating point value is supported
+  /// on this target.
+  virtual bool hasFPReturn() const { return HasFPReturn; }
 
   /// Determine whether constrained floating point is supported on this target.
   virtual bool hasStrictFP() const { return HasStrictFP; }
@@ -622,8 +644,8 @@ public:
   }
 
   /// Return the largest alignment for which a suitably-sized allocation with
-  /// '::operator new(size_t)' or 'malloc' is guaranteed to produce a
-  /// correctly-aligned pointer.
+  /// '::operator new(size_t)' is guaranteed to produce a correctly-aligned
+  /// pointer.
   unsigned getNewAlign() const {
     return NewAlign ? NewAlign : std::max(LongDoubleAlign, LongLongAlign);
   }
@@ -756,6 +778,9 @@ public:
   unsigned getIntMaxTWidth() const {
     return getTypeWidth(IntMaxType);
   }
+
+  /// Return the address space for functions for the given target.
+  unsigned getProgramAddressSpace() const { return ProgramAddrSpace; }
 
   // Return the size of unwind_word for this target.
   virtual unsigned getUnwindWordWidth() const { return getPointerWidth(0); }
@@ -1013,8 +1038,7 @@ public:
     }
     bool isValidAsmImmediate(const llvm::APInt &Value) const {
       if (!ImmSet.empty())
-        return Value.isSignedIntN(32) &&
-               ImmSet.count(Value.getZExtValue()) != 0;
+        return Value.isSignedIntN(32) && ImmSet.contains(Value.getZExtValue());
       return !ImmRange.isConstrained ||
              (Value.sge(ImmRange.Min) && Value.sle(ImmRange.Max));
     }
@@ -1276,9 +1300,15 @@ public:
     bool BranchTargetEnforcement = false;
   };
 
+  /// Determine if the Architecture in this TargetInfo supports branch
+  /// protection
+  virtual bool isBranchProtectionSupportedArch(StringRef Arch) const {
+    return false;
+  }
+
   /// Determine if this TargetInfo supports the given branch protection
   /// specification
-  virtual bool validateBranchProtection(StringRef Spec,
+  virtual bool validateBranchProtection(StringRef Spec, StringRef Arch,
                                         BranchProtectionInfo &BPI,
                                         StringRef &Err) const {
     Err = "";

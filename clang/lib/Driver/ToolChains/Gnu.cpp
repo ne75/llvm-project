@@ -312,7 +312,7 @@ static bool getPIE(const ArgList &Args, const ToolChain &TC) {
   Arg *A = Args.getLastArg(options::OPT_pie, options::OPT_no_pie,
                            options::OPT_nopie);
   if (!A)
-    return TC.isPIEDefault();
+    return TC.isPIEDefault(Args);
   return A->getOption().matches(options::OPT_pie);
 }
 
@@ -429,11 +429,6 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("text");
   }
 
-  if (ToolChain.isNoExecStackDefault()) {
-    CmdArgs.push_back("-z");
-    CmdArgs.push_back("noexecstack");
-  }
-
   if (Args.hasArg(options::OPT_rdynamic))
     CmdArgs.push_back("-export-dynamic");
 
@@ -473,17 +468,12 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     return;
   }
 
-  if (IsStatic) {
-    if (Arch == llvm::Triple::arm || Arch == llvm::Triple::armeb ||
-        Arch == llvm::Triple::thumb || Arch == llvm::Triple::thumbeb)
-      CmdArgs.push_back("-Bstatic");
-    else
-      CmdArgs.push_back("-static");
-  } else if (Args.hasArg(options::OPT_shared)) {
+  if (Args.hasArg(options::OPT_shared))
     CmdArgs.push_back("-shared");
-  }
 
-  if (!IsStatic) {
+  if (IsStatic) {
+    CmdArgs.push_back("-static");
+  } else {
     if (Args.hasArg(options::OPT_rdynamic))
       CmdArgs.push_back("-export-dynamic");
 
@@ -497,7 +487,8 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
-  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles,
+                   options::OPT_r)) {
     if (!isAndroid && !IsIAMCU) {
       const char *crt1 = nullptr;
       if (!Args.hasArg(options::OPT_shared)) {
@@ -534,10 +525,10 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       }
       if (P.empty()) {
         const char *crtbegin;
-        if (IsStatic)
-          crtbegin = isAndroid ? "crtbegin_static.o" : "crtbeginT.o";
-        else if (Args.hasArg(options::OPT_shared))
+        if (Args.hasArg(options::OPT_shared))
           crtbegin = isAndroid ? "crtbegin_so.o" : "crtbeginS.o";
+        else if (IsStatic)
+          crtbegin = isAndroid ? "crtbegin_static.o" : "crtbeginT.o";
         else if (IsPIE || IsStaticPIE)
           crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbeginS.o";
         else
@@ -573,7 +564,8 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   getToolChain().addProfileRTLibs(Args, CmdArgs);
 
   if (D.CCCIsCXX() &&
-      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
+      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs,
+                   options::OPT_r)) {
     if (ToolChain.ShouldLinkCXXStdlib(Args)) {
       bool OnlyLibstdcxxStatic = Args.hasArg(options::OPT_static_libstdcxx) &&
                                  !Args.hasArg(options::OPT_static);
@@ -588,7 +580,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   // Silence warnings when linking C code with a C++ '-stdlib' argument.
   Args.ClaimAllArgs(options::OPT_stdlib_EQ);
 
-  if (!Args.hasArg(options::OPT_nostdlib)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_r)) {
     if (!Args.hasArg(options::OPT_nodefaultlibs)) {
       if (IsStatic || IsStaticPIE)
         CmdArgs.push_back("--start-group");
@@ -702,7 +694,7 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
       CmdArgs.push_back("--compress-debug-sections");
     } else {
       StringRef Value = A->getValue();
-      if (Value == "none" || Value == "zlib" || Value == "zlib-gnu") {
+      if (Value == "none" || Value == "zlib") {
         CmdArgs.push_back(
             Args.MakeArgString("--compress-debug-sections=" + Twine(Value)));
       } else {
@@ -710,10 +702,6 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
             << A->getOption().getName() << Value;
       }
     }
-  }
-
-  if (getToolChain().isNoExecStackDefault()) {
-      CmdArgs.push_back("--noexecstack");
   }
 
   switch (getToolChain().getArch()) {
@@ -931,7 +919,7 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
   for (const Arg *A : Args.filtered(options::OPT_ffile_prefix_map_EQ,
                                     options::OPT_fdebug_prefix_map_EQ)) {
     StringRef Map = A->getValue();
-    if (Map.find('=') == StringRef::npos)
+    if (!Map.contains('='))
       D.Diag(diag::err_drv_invalid_argument_to_option)
           << Map << A->getOption().getName();
     else {
@@ -1086,7 +1074,8 @@ static bool findMipsCsMultilibs(const Multilib::flags_list &Flags,
                        .flag("-m32")
                        .flag("-mabi=n32");
 
-    Multilib M32 = Multilib().flag("-m64").flag("+m32").flag("-mabi=n32");
+    Multilib M32 =
+        Multilib().gccSuffix("/32").flag("-m64").flag("+m32").flag("-mabi=n32");
 
     DebianMipsMultilibs =
         MultilibSet().Either(M32, M64, MAbiN32).FilterOut(NonExistent);
@@ -2125,11 +2114,11 @@ void Generic_GCC::GCCInstallationDetector::AddDefaultGCCPrefixes(
   static const char *const M68kTriples[] = {
       "m68k-linux-gnu", "m68k-unknown-linux-gnu", "m68k-suse-linux"};
 
-  static const char *const MIPSLibDirs[] = {"/lib"};
+  static const char *const MIPSLibDirs[] = {"/libo32", "/lib"};
   static const char *const MIPSTriples[] = {
       "mips-linux-gnu", "mips-mti-linux", "mips-mti-linux-gnu",
       "mips-img-linux-gnu", "mipsisa32r6-linux-gnu"};
-  static const char *const MIPSELLibDirs[] = {"/lib"};
+  static const char *const MIPSELLibDirs[] = {"/libo32", "/lib"};
   static const char *const MIPSELTriples[] = {
       "mipsel-linux-gnu", "mips-img-linux-gnu", "mipsisa32r6el-linux-gnu"};
 
@@ -2727,7 +2716,9 @@ bool Generic_GCC::isPICDefault() const {
   }
 }
 
-bool Generic_GCC::isPIEDefault() const { return false; }
+bool Generic_GCC::isPIEDefault(const llvm::opt::ArgList &Args) const {
+  return false;
+}
 
 bool Generic_GCC::isPICDefaultForced() const {
   return getArch() == llvm::Triple::x86_64 && getTriple().isOSWindows();

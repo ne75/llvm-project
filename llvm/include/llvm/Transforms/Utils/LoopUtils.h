@@ -37,7 +37,6 @@ class MemorySSAUpdater;
 class OptimizationRemarkEmitter;
 class PredIteratorCache;
 class ScalarEvolution;
-class ScalarEvolutionExpander;
 class SCEV;
 class SCEVExpander;
 class TargetLibraryInfo;
@@ -172,10 +171,13 @@ bool sinkRegionForLoopNest(DomTreeNode *, AAResults *, LoopInfo *,
 /// BlockFrequencyInfo, TargetLibraryInfo, Loop, AliasSet information for all
 /// instructions of the loop and loop safety information as arguments.
 /// Diagnostics is emitted via \p ORE. It returns changed status.
+/// \p AllowSpeculation is whether values should be hoisted even if they are not
+/// guaranteed to execute in the loop, but are safe to speculatively execute.
 bool hoistRegion(DomTreeNode *, AAResults *, LoopInfo *, DominatorTree *,
                  BlockFrequencyInfo *, TargetLibraryInfo *, Loop *,
                  MemorySSAUpdater *, ScalarEvolution *, ICFLoopSafetyInfo *,
-                 SinkAndHoistLICMFlags &, OptimizationRemarkEmitter *, bool);
+                 SinkAndHoistLICMFlags &, OptimizationRemarkEmitter *, bool,
+                 bool AllowSpeculation);
 
 /// This function deletes dead loops. The caller of this function needs to
 /// guarantee that the loop is infact dead.
@@ -205,12 +207,14 @@ void breakLoopBackedge(Loop *L, DominatorTree &DT, ScalarEvolution &SE,
 /// LoopInfo, DominatorTree, Loop, AliasSet information for all instructions
 /// of the loop and loop safety information as arguments.
 /// Diagnostics is emitted via \p ORE. It returns changed status.
+/// \p AllowSpeculation is whether values should be hoisted even if they are not
+/// guaranteed to execute in the loop, but are safe to speculatively execute.
 bool promoteLoopAccessesToScalars(
     const SmallSetVector<Value *, 8> &, SmallVectorImpl<BasicBlock *> &,
     SmallVectorImpl<Instruction *> &, SmallVectorImpl<MemoryAccess *> &,
     PredIteratorCache &, LoopInfo *, DominatorTree *, const TargetLibraryInfo *,
     Loop *, MemorySSAUpdater *, ICFLoopSafetyInfo *,
-    OptimizationRemarkEmitter *);
+    OptimizationRemarkEmitter *, bool AllowSpeculation);
 
 /// Does a BFS from a given node to all of its children inside a given loop.
 /// The returned vector of nodes includes the starting point.
@@ -367,14 +371,12 @@ Value *createMinMaxOp(IRBuilderBase &Builder, RecurKind RK, Value *Left,
 
 /// Generates an ordered vector reduction using extracts to reduce the value.
 Value *getOrderedReduction(IRBuilderBase &Builder, Value *Acc, Value *Src,
-                           unsigned Op, RecurKind MinMaxKind = RecurKind::None,
-                           ArrayRef<Value *> RedOps = None);
+                           unsigned Op, RecurKind MinMaxKind = RecurKind::None);
 
 /// Generates a vector reduction using shufflevectors to reduce the value.
 /// Fast-math-flags are propagated using the IRBuilder's setting.
 Value *getShuffleReduction(IRBuilderBase &Builder, Value *Src, unsigned Op,
-                           RecurKind MinMaxKind = RecurKind::None,
-                           ArrayRef<Value *> RedOps = None);
+                           RecurKind MinMaxKind = RecurKind::None);
 
 /// Create a target reduction of the given vector. The reduction operation
 /// is described by the \p Opcode parameter. min/max reductions require
@@ -384,8 +386,7 @@ Value *getShuffleReduction(IRBuilderBase &Builder, Value *Src, unsigned Op,
 /// Fast-math-flags are propagated using the IRBuilder's setting.
 Value *createSimpleTargetReduction(IRBuilderBase &B,
                                    const TargetTransformInfo *TTI, Value *Src,
-                                   RecurKind RdxKind,
-                                   ArrayRef<Value *> RedOps = None);
+                                   RecurKind RdxKind);
 
 /// Create a target reduction of the given vector \p Src for a reduction of the
 /// kind RecurKind::SelectICmp or RecurKind::SelectFCmp. The reduction operation

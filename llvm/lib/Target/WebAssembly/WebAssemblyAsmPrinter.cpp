@@ -51,8 +51,6 @@ using namespace llvm;
 #define DEBUG_TYPE "asm-printer"
 
 extern cl::opt<bool> WasmKeepRegisters;
-extern cl::opt<bool> WasmEnableEmEH;
-extern cl::opt<bool> WasmEnableEmSjLj;
 
 //===----------------------------------------------------------------------===//
 // Helpers.
@@ -183,17 +181,18 @@ void WebAssemblyAsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
 
   if (!Sym->getType()) {
     const WebAssemblyTargetLowering &TLI = *Subtarget->getTargetLowering();
-    SmallVector<EVT, 1> VTs;
-    ComputeValueVTs(TLI, GV->getParent()->getDataLayout(), GV->getValueType(),
-                    VTs);
-    if (VTs.size() != 1 ||
-        TLI.getNumRegisters(GV->getParent()->getContext(), VTs[0]) != 1)
-      report_fatal_error("Aggregate globals not yet implemented");
-    MVT VT = TLI.getRegisterType(GV->getParent()->getContext(), VTs[0]);
-    bool Mutable = true;
-    wasm::ValType Type = WebAssembly::toValType(VT);
-    Sym->setType(wasm::WASM_SYMBOL_TYPE_GLOBAL);
-    Sym->setGlobalType(wasm::WasmGlobalType{uint8_t(Type), Mutable});
+    SmallVector<MVT, 1> VTs;
+    Type *GlobalVT = GV->getValueType();
+    computeLegalValueVTs(TLI, GV->getParent()->getContext(),
+                         GV->getParent()->getDataLayout(), GlobalVT, VTs);
+    WebAssembly::wasmSymbolSetType(Sym, GlobalVT, VTs);
+  }
+
+  // If the GlobalVariable refers to a table, we handle it here instead of
+  // in emitExternalDecls
+  if (Sym->isTable()) {
+    getTargetStreamer()->emitTableType(Sym);
+    return;
   }
 
   emitVisibility(Sym, GV->getVisibility(), !GV->isDeclaration());
@@ -315,8 +314,9 @@ void WebAssemblyAsmPrinter::emitExternalDecls(const Module &M) {
       // will discard it later if it turns out not to be necessary.
       auto Signature = signatureFromMVTs(Results, Params);
       bool InvokeDetected = false;
-      auto *Sym = getMCSymbolForFunction(&F, WasmEnableEmEH || WasmEnableEmSjLj,
-                                         Signature.get(), InvokeDetected);
+      auto *Sym = getMCSymbolForFunction(
+          &F, WebAssembly::WasmEnableEmEH || WebAssembly::WasmEnableEmSjLj,
+          Signature.get(), InvokeDetected);
 
       // Multiple functions can be mapped to the same invoke symbol. For
       // example, two IR functions '__invoke_void_i8*' and '__invoke_void_i32'
@@ -502,6 +502,15 @@ void WebAssemblyAsmPrinter::EmitTargetFeatures(Module &M) {
   }
   // This pseudo-feature tells the linker whether shared memory would be safe
   EmitFeature("shared-mem");
+
+  // This is an "architecture", not a "feature", but we emit it as such for
+  // the benefit of tools like Binaryen and consistency with other producers.
+  // FIXME: Subtarget is null here, so can't Subtarget->hasAddr64() ?
+  if (M.getDataLayout().getPointerSize() == 8) {
+    // Can't use EmitFeature since "wasm-feature-memory64" is not a module
+    // flag.
+    EmittedFeatures.push_back({wasm::WASM_FEATURE_PREFIX_USED, "memory64"});
+  }
 
   if (EmittedFeatures.size() == 0)
     return;

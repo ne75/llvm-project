@@ -1,4 +1,4 @@
-//===------------------------- AddressSpace.hpp ---------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -83,6 +83,7 @@ struct EHABIIndexEntry {
 //   __eh_frame_hdr_start = SIZEOF(.eh_frame_hdr) > 0 ? ADDR(.eh_frame_hdr) : 0;
 //   __eh_frame_hdr_end = SIZEOF(.eh_frame_hdr) > 0 ? . : 0;
 
+#if !defined(RUST_SGX)
 extern char __eh_frame_start;
 extern char __eh_frame_end;
 
@@ -90,6 +91,15 @@ extern char __eh_frame_end;
 extern char __eh_frame_hdr_start;
 extern char __eh_frame_hdr_end;
 #endif
+
+#elif defined(RUST_SGX)
+extern "C" char IMAGE_BASE;
+extern "C" uint64_t EH_FRM_HDR_OFFSET;
+extern "C" uint64_t EH_FRM_HDR_LEN;
+extern "C" uint64_t EH_FRM_OFFSET;
+extern "C" uint64_t EH_FRM_LEN;
+#endif
+
 
 #elif defined(_LIBUNWIND_ARM_EHABI) && defined(_LIBUNWIND_IS_BAREMETAL)
 
@@ -121,23 +131,23 @@ struct UnwindInfoSections {
   uintptr_t       dso_base;
 #endif
 #if defined(_LIBUNWIND_USE_DL_ITERATE_PHDR)
-  uintptr_t       text_segment_length;
+  size_t          text_segment_length;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
   uintptr_t       dwarf_section;
-  uintptr_t       dwarf_section_length;
+  size_t          dwarf_section_length;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
   uintptr_t       dwarf_index_section;
-  uintptr_t       dwarf_index_section_length;
+  size_t          dwarf_index_section_length;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
   uintptr_t       compact_unwind_section;
-  uintptr_t       compact_unwind_section_length;
+  size_t          compact_unwind_section_length;
 #endif
 #if defined(_LIBUNWIND_ARM_EHABI)
   uintptr_t       arm_section;
-  uintptr_t       arm_section_length;
+  size_t          arm_section_length;
 #endif
 };
 
@@ -430,7 +440,7 @@ static bool checkForUnwindInfoSegment(const Elf_Phdr *phdr, size_t image_base,
       // .eh_frame_hdr records the start of .eh_frame, but not its size.
       // Rely on a zero terminator to find the end of the section.
       cbdata->sects->dwarf_section = hdrInfo.eh_frame_ptr;
-      cbdata->sects->dwarf_section_length = UINTPTR_MAX;
+      cbdata->sects->dwarf_section_length = SIZE_MAX;
       return true;
     }
   }
@@ -498,6 +508,10 @@ static int findUnwindSectionsByPhdr(struct dl_phdr_info *pinfo,
 #endif  // defined(_LIBUNWIND_USE_DL_ITERATE_PHDR)
 
 
+#if defined(RUST_SGX)
+extern "C" char IMAGE_BASE;
+#endif
+    
 inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
                                                   UnwindInfoSections &info) {
 #ifdef __APPLE__
@@ -506,31 +520,44 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
     info.dso_base                      = (uintptr_t)dyldInfo.mh;
  #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
     info.dwarf_section                 = (uintptr_t)dyldInfo.dwarf_section;
-    info.dwarf_section_length          = dyldInfo.dwarf_section_length;
+    info.dwarf_section_length          = (size_t)dyldInfo.dwarf_section_length;
  #endif
     info.compact_unwind_section        = (uintptr_t)dyldInfo.compact_unwind_section;
-    info.compact_unwind_section_length = dyldInfo.compact_unwind_section_length;
+    info.compact_unwind_section_length = (size_t)dyldInfo.compact_unwind_section_length;
     return true;
   }
 #elif defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND) && defined(_LIBUNWIND_IS_BAREMETAL)
   info.dso_base = 0;
   // Bare metal is statically linked, so no need to ask the dynamic loader
-  info.dwarf_section_length = (uintptr_t)(&__eh_frame_end - &__eh_frame_start);
+
+#if !defined(RUST_SGX)
+  info.dwarf_section_length = (size_t)(&__eh_frame_end - &__eh_frame_start);
   info.dwarf_section =        (uintptr_t)(&__eh_frame_start);
   _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: section %p length %p",
                              (void *)info.dwarf_section, (void *)info.dwarf_section_length);
 #if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
   info.dwarf_index_section =        (uintptr_t)(&__eh_frame_hdr_start);
-  info.dwarf_index_section_length = (uintptr_t)(&__eh_frame_hdr_end - &__eh_frame_hdr_start);
+  info.dwarf_index_section_length = (size_t)(&__eh_frame_hdr_end - &__eh_frame_hdr_start);
   _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: index section %p length %p",
                              (void *)info.dwarf_index_section, (void *)info.dwarf_index_section_length);
 #endif
+
+#elif defined(RUST_SGX)
+  info.dwarf_section =        (uintptr_t)EH_FRM_OFFSET + (uintptr_t)(&IMAGE_BASE);
+  info.dwarf_section_length = (uintptr_t)EH_FRM_LEN;
+#if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
+  info.dwarf_index_section =        (uintptr_t)EH_FRM_HDR_OFFSET + (uintptr_t)(&IMAGE_BASE);
+  info.dwarf_index_section_length = (uintptr_t)EH_FRM_HDR_LEN;
+#endif
+
+#endif
+  
   if (info.dwarf_section_length)
     return true;
 #elif defined(_LIBUNWIND_ARM_EHABI) && defined(_LIBUNWIND_IS_BAREMETAL)
   // Bare metal is statically linked, so no need to ask the dynamic loader
   info.arm_section =        (uintptr_t)(&__exidx_start);
-  info.arm_section_length = (uintptr_t)(&__exidx_end - &__exidx_start);
+  info.arm_section_length = (size_t)(&__exidx_end - &__exidx_start);
   _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: section %p length %p",
                              (void *)info.arm_section, (void *)info.arm_section_length);
   if (info.arm_section && info.arm_section_length)
@@ -584,7 +611,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
   int length = 0;
   info.arm_section =
       (uintptr_t)dl_unwind_find_exidx((_Unwind_Ptr)targetAddr, &length);
-  info.arm_section_length = (uintptr_t)length * sizeof(EHABIIndexEntry);
+  info.arm_section_length = (size_t)length * sizeof(EHABIIndexEntry);
   if (info.arm_section && info.arm_section_length)
     return true;
 #elif defined(_LIBUNWIND_USE_DL_ITERATE_PHDR)

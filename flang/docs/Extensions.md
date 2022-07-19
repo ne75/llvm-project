@@ -31,7 +31,8 @@ accepted if enabled by command-line options.
   This conversion allows the results of the intrinsics like
   `SIZE` that (as mentioned below) may return non-default
   `INTEGER` results by default to be passed.  A warning is
-  emitted when truncation is possible.
+  emitted when truncation is possible.  These conversions
+  are not applied in calls to non-intrinsic generic procedures.
 * We are not strict on the contents of `BLOCK DATA` subprograms
   so long as they contain no executable code, no internal subprograms,
   and allocate no storage outside a named `COMMON` block.  (C1415)
@@ -80,7 +81,9 @@ end
 * Kind specification with `*`, e.g. `REAL*4`
 * `DOUBLE COMPLEX`
 * Signed complex literal constants
-* DEC `STRUCTURE`, `RECORD`, `UNION`, and `MAP`
+* DEC `STRUCTURE`, `RECORD`, with '%FILL'; but `UNION`, and `MAP`
+  are not yet supported throughout compilation, and elicit a
+  "not yet implemented" message.
 * Structure field access with `.field`
 * `BYTE` as synonym for `INTEGER(KIND=1)`
 * Quad precision REAL literals with `Q`
@@ -121,14 +124,18 @@ end
   files are easier to write and use.
 * $ and \ edit descriptors are supported in FORMAT to suppress newline
   output on user prompts.
+* Tabs in format strings (not `FORMAT` statements) are allowed on output.
 * REAL and DOUBLE PRECISION variable and bounds in DO loops
 * Integer literals without explicit kind specifiers that are out of range
   for the default kind of INTEGER are assumed to have the least larger kind
   that can hold them, if one exists.
 * BOZ literals can be used as INTEGER values in contexts where the type is
   unambiguous: the right hand sides of assigments and initializations
-  of INTEGER entities, and as actual arguments to a few intrinsic functions
-  (ACHAR, BTEST, CHAR).  BOZ literals are interpreted as default INTEGER
+  of INTEGER entities, as actual arguments to a few intrinsic functions
+  (ACHAR, BTEST, CHAR), and as actual arguments of references to
+  procedures with explicit interfaces whose corresponding dummy
+  argument has a numeric type to which the BOZ literal may be
+  converted.  BOZ literals are interpreted as default INTEGER only
   when they appear as the first items of array constructors with no
   explicit type.  Otherwise, they generally cannot be used if the type would
   not be known (e.g., `IAND(X'1',X'2')`).
@@ -161,6 +168,10 @@ end
   hold true for definable arguments.
 * Assignment of `LOGICAL` to `INTEGER` and vice versa (but not other types) is
   allowed.  The values are normalized.
+* Static initialization of `LOGICAL` with `INTEGER` is allowed in `DATA` statements
+  and object initializers.
+  The results are *not* normalized to canonical `.TRUE.`/`.FALSE.`.
+  Static initialization of `INTEGER` with `LOGICAL` is also permitted.
 * An effectively empty source file (no program unit) is accepted and
   produces an empty relocatable output file.
 * A `RETURN` statement may appear in a main program.
@@ -179,6 +190,31 @@ end
   we also treat scalars as being trivially contiguous, so that they
   can be used in contexts like data targets in pointer assignments
   with bounds remapping.
+* We support some combinations of specific procedures in generic
+  interfaces that a strict reading of the standard would preclude
+  when their calls must nonetheless be distinguishable.
+  Specifically, `ALLOCATABLE` dummy arguments are distinguishing
+  if an actual argument acceptable to one could not be passed to
+  the other & vice versa because exactly one is polymorphic or
+  exactly one is unlimited polymorphic).
+* External unit 0 is predefined and connected to the standard error output,
+  and defined as `ERROR_UNIT` in the intrinsic `ISO_FORTRAN_ENV` module.
+* Objects in blank COMMON may be initialized.
+* Multiple specifications of the SAVE attribute on the same object
+  are allowed, with a warning.
+* Specific intrinsic functions BABS, IIABS, JIABS, KIABS, ZABS, and CDABS.
+* A `POINTER` component's type need not be a sequence type when
+  the component appears in a derived type with `SEQUENCE`.
+  (This case should probably be an exception to constraint C740 in
+  the standard.)
+* Format expressions that have type but are not character and not
+  integer scalars are accepted so long as they are simply contiguous.
+  This legacy extension supports pre-Fortran'77 usage in which
+  variables initialized in DATA statements with Hollerith literals
+  as modifiable formats.
+* At runtime, `NAMELIST` input will skip over `NAMELIST` groups
+  with other names, and will treat text before and between groups
+  as if they were comment lines, even if not begun with `!`.
 
 ### Extensions supported when enabled by options
 
@@ -340,3 +376,12 @@ end
   the parent, allocatable or not;
   all finalization takes place before any deallocation;
   and no object or subobject will be finalized more than once.
+
+* When `RECL=` is set via the `OPEN` statement for a sequential formatted input
+  file, it functions as an effective maximum record length.
+  Longer records, if any, will appear as if they had been truncated to
+  the value of `RECL=`.
+  (Other compilers ignore `RECL=`, signal an error, or apply effective truncation
+  to some forms of input in this situation.)
+  For sequential formatted output, RECL= serves as a limit on record lengths
+  that raises an error when it is exceeded.

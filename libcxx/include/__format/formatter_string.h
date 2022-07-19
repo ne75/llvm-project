@@ -16,7 +16,6 @@
 #include <__format/format_string.h>
 #include <__format/formatter.h>
 #include <__format/parser_std_format_spec.h>
-#include <algorithm>
 #include <string_view>
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
@@ -65,7 +64,7 @@ public:
 // [format.formatter.spec]/2.2 For each charT, the string type specializations
 
 // Formatter const char*.
-template <class _CharT>
+template <__formatter::__char_type _CharT>
 struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
     formatter<const _CharT*, _CharT>
     : public __format_spec::__formatter_string<_CharT> {
@@ -99,7 +98,7 @@ struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
 };
 
 // Formatter char*.
-template <class _CharT>
+template <__formatter::__char_type _CharT>
 struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
     formatter<_CharT*, _CharT> : public formatter<const _CharT*, _CharT> {
   using _Base = formatter<const _CharT*, _CharT>;
@@ -111,7 +110,7 @@ struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
 };
 
 // Formatter const char[].
-template <class _CharT, size_t _Size>
+template <__formatter::__char_type _CharT, size_t _Size>
 struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
     formatter<const _CharT[_Size], _CharT>
     : public __format_spec::__formatter_string<_CharT> {
@@ -119,12 +118,12 @@ struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
 
   _LIBCPP_HIDE_FROM_ABI auto format(const _CharT __str[_Size], auto& __ctx)
       -> decltype(__ctx.out()) {
-    return _Base::format(_VSTD::basic_string_view<_CharT>(__str, _Size), __ctx);
+    return _Base::format(basic_string_view<_CharT>(__str, _Size), __ctx);
   }
 };
 
 // Formatter std::string.
-template <class _CharT, class _Traits, class _Allocator>
+template <__formatter::__char_type _CharT, class _Traits, class _Allocator>
 struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
     formatter<basic_string<_CharT, _Traits, _Allocator>, _CharT>
     : public __format_spec::__formatter_string<_CharT> {
@@ -133,15 +132,24 @@ struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
   _LIBCPP_HIDE_FROM_ABI auto
   format(const basic_string<_CharT, _Traits, _Allocator>& __str, auto& __ctx)
       -> decltype(__ctx.out()) {
-    return _Base::format(_VSTD::basic_string_view<_CharT>(__str), __ctx);
+    // drop _Traits and _Allocator
+    return _Base::format(basic_string_view<_CharT>(__str.data(), __str.size()), __ctx);
   }
 };
 
 // Formatter std::string_view.
-template <class _CharT, class _Traits>
-struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT
-    formatter<basic_string_view<_CharT, _Traits>, _CharT>
-    : public __format_spec::__formatter_string<_CharT> {};
+template <__formatter::__char_type _CharT, class _Traits>
+struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<basic_string_view<_CharT, _Traits>, _CharT>
+    : public __format_spec::__formatter_string<_CharT> {
+  using _Base = __format_spec::__formatter_string<_CharT>;
+
+  _LIBCPP_HIDE_FROM_ABI auto
+  format(basic_string_view<_CharT, _Traits> __str, auto& __ctx)
+      -> decltype(__ctx.out()) {
+    // drop _Traits
+    return _Base::format(basic_string_view<_CharT>(__str.data(), __str.size()), __ctx);
+  }
+};
 
 #endif // !defined(_LIBCPP_HAS_NO_CONCEPTS)
 

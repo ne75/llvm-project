@@ -3,7 +3,7 @@
 MLIR (Multi-Level IR) is a compiler intermediate representation with
 similarities to traditional three-address SSA representations (like
 [LLVM IR](http://llvm.org/docs/LangRef.html) or
-[SIL](https://github.com/apple/swift/blob/master/docs/SIL.rst)), but which
+[SIL](https://github.com/apple/swift/blob/main/docs/SIL.rst)), but which
 introduces notions from polyhedral loop optimization as first-class concepts.
 This hybrid design is optimized to represent, analyze, and transform high level
 dataflow graphs as well as target-specific code generated for high performance
@@ -178,6 +178,19 @@ string-literal  ::= `"` [^"\n\f\v\r]* `"`   TODO: define escaping rules
 
 Not listed here, but MLIR does support comments. They use standard BCPL syntax,
 starting with a `//` and going until the end of the line.
+
+
+### Top level Productions
+
+```
+// Top level production
+toplevel := (operation | attribute-alias-def | type-alias-def)*
+```
+
+The production `toplevel` is the top level production that is parsed by any parsing
+consuming the MLIR syntax. [Operations](#operations),
+[Attribute alises](#attribute-value-aliases), and [Type aliases](#type-aliases)
+can be declared on the toplevel.
 
 ### Identifiers and keywords
 
@@ -439,7 +452,7 @@ For example, in a function body, block terminators must either branch to a
 different block, or return from a function where the types of the `return`
 arguments must match the result types of the function signature. Similarly, the
 function arguments must match the types and count of the region arguments. In
-general, operations with regions can define these correspondances arbitrarily.
+general, operations with regions can define these correspondences arbitrarily.
 
 ### Value Scoping
 

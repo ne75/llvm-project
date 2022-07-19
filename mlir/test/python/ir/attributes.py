@@ -66,10 +66,6 @@ def testAttrHash():
     a3 = Attribute.parse('"attr1"')
     # CHECK: hash(a1) == hash(a3): True
     print("hash(a1) == hash(a3):", a1.__hash__() == a3.__hash__())
-    # In general, hashes don't have to be unique. In this case, however, the
-    # hash is just the underlying pointer so it will be.
-    # CHECK: hash(a1) == hash(a2): False
-    print("hash(a1) == hash(a2):", a1.__hash__() == a2.__hash__())
 
     s = set()
     s.add(a1)
@@ -296,6 +292,50 @@ def testDenseIntAttr():
     print(ShapedType(a.type).element_type)
 
 
+# CHECK-LABEL: TEST: testDenseIntAttrGetItem
+@run
+def testDenseIntAttrGetItem():
+  def print_item(attr_asm):
+    attr = DenseIntElementsAttr(Attribute.parse(attr_asm))
+    dtype = ShapedType(attr.type).element_type
+    try:
+      item = attr[0]
+      print(f"{dtype}:", item)
+    except TypeError as e:
+      print(f"{dtype}:", e)
+
+  with Context():
+    # CHECK: i1: 1
+    print_item("dense<true> : tensor<i1>")
+    # CHECK: i8: 123
+    print_item("dense<123> : tensor<i8>")
+    # CHECK: i16: 123
+    print_item("dense<123> : tensor<i16>")
+    # CHECK: i32: 123
+    print_item("dense<123> : tensor<i32>")
+    # CHECK: i64: 123
+    print_item("dense<123> : tensor<i64>")
+    # CHECK: ui8: 123
+    print_item("dense<123> : tensor<ui8>")
+    # CHECK: ui16: 123
+    print_item("dense<123> : tensor<ui16>")
+    # CHECK: ui32: 123
+    print_item("dense<123> : tensor<ui32>")
+    # CHECK: ui64: 123
+    print_item("dense<123> : tensor<ui64>")
+    # CHECK: si8: -123
+    print_item("dense<-123> : tensor<si8>")
+    # CHECK: si16: -123
+    print_item("dense<-123> : tensor<si16>")
+    # CHECK: si32: -123
+    print_item("dense<-123> : tensor<si32>")
+    # CHECK: si64: -123
+    print_item("dense<-123> : tensor<si64>")
+
+    # CHECK: i7: Unsupported integer type
+    print_item("dense<123> : tensor<i7>")
+
+
 # CHECK-LABEL: TEST: testDenseFPAttr
 @run
 def testDenseFPAttr():
@@ -339,6 +379,12 @@ def testDictAttr():
 
     # CHECK: "string"
     print(a['stringattr'])
+
+    # CHECK: True
+    print('stringattr' in a)
+
+    # CHECK: False
+    print('not_in_dict' in a)
 
     # Check that exceptions are raised as expected.
     try:

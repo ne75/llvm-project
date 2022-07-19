@@ -329,7 +329,7 @@ private:
       EntryValueKind,
       EntryValueBackupKind,
       EntryValueCopyBackupKind
-    } EVKind;
+    } EVKind = EntryValueLocKind::NonEntryValueKind;
 
     /// The value location. Stored separately to avoid repeatedly
     /// extracting it from MI.
@@ -397,8 +397,7 @@ private:
     VarLoc(const MachineInstr &MI, LexicalScopes &LS)
         : Var(MI.getDebugVariable(), MI.getDebugExpression(),
               MI.getDebugLoc()->getInlinedAt()),
-          Expr(MI.getDebugExpression()), MI(MI),
-          EVKind(EntryValueLocKind::NonEntryValueKind) {
+          Expr(MI.getDebugExpression()), MI(MI) {
       assert(MI.isDebugValue() && "not a DBG_VALUE");
       assert((MI.isDebugValueList() || MI.getNumOperands() == 4) &&
              "malformed DBG_VALUE");
@@ -492,10 +491,10 @@ private:
     static VarLoc CreateCopyLoc(const VarLoc &OldVL, const MachineLoc &OldML,
                                 Register NewReg) {
       VarLoc VL = OldVL;
-      for (size_t I = 0, E = VL.Locs.size(); I < E; ++I)
-        if (VL.Locs[I] == OldML) {
-          VL.Locs[I].Kind = MachineLocKind::RegisterKind;
-          VL.Locs[I].Value.RegNo = NewReg;
+      for (MachineLoc &ML : VL.Locs)
+        if (ML == OldML) {
+          ML.Kind = MachineLocKind::RegisterKind;
+          ML.Value.RegNo = NewReg;
           return VL;
         }
       llvm_unreachable("Should have found OldML in new VarLoc.");
@@ -506,10 +505,10 @@ private:
     static VarLoc CreateSpillLoc(const VarLoc &OldVL, const MachineLoc &OldML,
                                  unsigned SpillBase, StackOffset SpillOffset) {
       VarLoc VL = OldVL;
-      for (int I = 0, E = VL.Locs.size(); I < E; ++I)
-        if (VL.Locs[I] == OldML) {
-          VL.Locs[I].Kind = MachineLocKind::SpillLocKind;
-          VL.Locs[I].Value.SpillLocation = {SpillBase, SpillOffset};
+      for (MachineLoc &ML : VL.Locs)
+        if (ML == OldML) {
+          ML.Kind = MachineLocKind::SpillLocKind;
+          ML.Value.SpillLocation = {SpillBase, SpillOffset};
           return VL;
         }
       llvm_unreachable("Should have found OldML in new VarLoc.");
@@ -1525,8 +1524,7 @@ void VarLocBasedLDV::transferRegisterDef(MachineInstr &MI,
       for (MCRegAliasIterator RAI(MO.getReg(), TRI, true); RAI.isValid(); ++RAI)
         // FIXME: Can we break out of this loop early if no insertion occurs?
         DeadRegs.insert(*RAI);
-      if (RegSetInstrs.find(MO.getReg()) != RegSetInstrs.end())
-        RegSetInstrs.erase(MO.getReg());
+      RegSetInstrs.erase(MO.getReg());
       RegSetInstrs.insert({MO.getReg(), &MI});
     } else if (MO.isRegMask()) {
       RegMasks.push_back(MO.getRegMask());
@@ -1555,8 +1553,7 @@ void VarLocBasedLDV::transferRegisterDef(MachineInstr &MI,
       if (AnyRegMaskKillsReg)
         DeadRegs.insert(Reg);
       if (AnyRegMaskKillsReg) {
-        if (RegSetInstrs.find(Reg) != RegSetInstrs.end())
-          RegSetInstrs.erase(Reg);
+        RegSetInstrs.erase(Reg);
         RegSetInstrs.insert({Reg, &MI});
       }
     }

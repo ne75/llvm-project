@@ -1,3 +1,4 @@
+include(GNUInstallDirs)
 include(LLVMDistributionSupport)
 
 function(mlir_tablegen ofn)
@@ -12,8 +13,8 @@ function(add_mlir_dialect dialect dialect_namespace)
   set(LLVM_TARGET_DEFINITIONS ${dialect}.td)
   mlir_tablegen(${dialect}.h.inc -gen-op-decls)
   mlir_tablegen(${dialect}.cpp.inc -gen-op-defs)
-  mlir_tablegen(${dialect}Types.h.inc -gen-typedef-decls)
-  mlir_tablegen(${dialect}Types.cpp.inc -gen-typedef-defs)
+  mlir_tablegen(${dialect}Types.h.inc -gen-typedef-decls -typedefs-dialect=${dialect_namespace})
+  mlir_tablegen(${dialect}Types.cpp.inc -gen-typedef-defs -typedefs-dialect=${dialect_namespace})
   mlir_tablegen(${dialect}Dialect.h.inc -gen-dialect-decls -dialect=${dialect_namespace})
   mlir_tablegen(${dialect}Dialect.cpp.inc -gen-dialect-defs -dialect=${dialect_namespace})
   add_public_tablegen_target(MLIR${dialect}IncGen)
@@ -189,7 +190,7 @@ function(add_mlir_library name)
 
     # In order for out-of-tree projects to build aggregates of this library,
     # we need to install the OBJECT library.
-    if(NOT ARG_DISABLE_INSTALL)
+    if(MLIR_INSTALL_AGGREGATE_OBJECTS AND NOT ARG_DISABLE_INSTALL)
       add_mlir_library_install(obj.${name})
     endif()
   endif()
@@ -279,6 +280,10 @@ function(add_mlir_aggregate name)
       # It is an imported target, which can only have flat strings populated
       # (no generator expressions).
       # Rebuild the generator expressions from the imported flat string lists.
+      if(NOT MLIR_INSTALL_AGGREGATE_OBJECTS)
+        message(SEND_ERROR "Cannot build aggregate from imported targets which were not installed via MLIR_INSTALL_AGGREGATE_OBJECTS (for ${lib}).")
+      endif()
+
       get_property(_has_object_lib_prop TARGET ${lib} PROPERTY MLIR_AGGREGATE_OBJECT_LIB_IMPORTED SET)
       get_property(_has_dep_libs_prop TARGET ${lib} PROPERTY MLIR_AGGREGATE_DEP_LIBS_IMPORTED SET)
       if(NOT _has_object_lib_prop OR NOT _has_dep_libs_prop)
@@ -367,7 +372,7 @@ function(add_mlir_library_install name)
     ${export_to_mlirtargets}
     LIBRARY DESTINATION lib${LLVM_LIBDIR_SUFFIX}
     ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX}
-    RUNTIME DESTINATION bin
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     # Note that CMake will create a directory like:
     #   objects-${CMAKE_BUILD_TYPE}/obj.LibName
     # and put object files there.

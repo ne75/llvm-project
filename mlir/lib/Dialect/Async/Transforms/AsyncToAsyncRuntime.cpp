@@ -190,6 +190,13 @@ static CoroMachinery setupCoroMachinery(FuncOp func) {
     }
   }
 
+  // The switch-resumed API based coroutine should be marked with
+  // "coroutine.presplit" attribute with value "0" to mark the function as a
+  // coroutine.
+  func->setAttr("passthrough", builder.getArrayAttr(builder.getArrayAttr(
+                                   {builder.getStringAttr("coroutine.presplit"),
+                                    builder.getStringAttr("0")})));
+
   CoroMachinery machinery;
   machinery.func = func;
   machinery.asyncToken = retToken;
@@ -578,7 +585,7 @@ public:
 
     Block *cont = rewriter.splitBlock(op->getBlock(), Block::iterator(op));
     rewriter.setInsertionPointToEnd(cont->getPrevNode());
-    rewriter.create<CondBranchOp>(loc, adaptor.arg(),
+    rewriter.create<CondBranchOp>(loc, adaptor.getArg(),
                                   /*trueDest=*/cont,
                                   /*trueArgs=*/ArrayRef<Value>(),
                                   /*falseDest=*/setupSetErrorBlock(coro),

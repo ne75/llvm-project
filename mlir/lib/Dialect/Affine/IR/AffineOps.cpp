@@ -11,6 +11,7 @@
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/IntegerSet.h"
@@ -203,7 +204,7 @@ struct AffineInlinerInterface : public DialectInlinerInterface {
   /// Affine regions should be analyzed recursively.
   bool shouldAnalyzeRecursively(Operation *op) const final { return true; }
 };
-} // end anonymous namespace
+} // namespace
 
 //===----------------------------------------------------------------------===//
 // AffineDialect
@@ -625,13 +626,13 @@ static LogicalResult replaceDimOrSym(AffineMap *map,
   ValueRange composeSyms =
       affineApply.getMapOperands().take_back(composeMap.getNumSymbols());
 
-  // Perform the replacement and append the dims and symbols where relevant.
+  // Append the dims and symbols where relevant and perform the replacement.
   MLIRContext *ctx = map->getContext();
   AffineExpr toReplace = isDimReplacement ? getAffineDimExpr(pos, ctx)
                                           : getAffineSymbolExpr(pos, ctx);
-  *map = map->replace(toReplace, composeExpr, dims.size(), syms.size());
   dims.append(composeDims.begin(), composeDims.end());
   syms.append(composeSyms.begin(), composeSyms.end());
+  *map = map->replace(toReplace, composeExpr, dims.size(), syms.size());
 
   return success();
 }
@@ -679,7 +680,7 @@ static void composeAffineMapAndOperands(AffineMap *map,
   for (auto *container : {&dims, &syms}) {
     bool isDim = (container == &dims);
     auto &repls = isDim ? dimReplacements : symReplacements;
-    for (auto en : llvm::enumerate(*container)) {
+    for (const auto &en : llvm::enumerate(*container)) {
       Value v = en.value();
       if (!v) {
         assert(isDim ? !map->isFunctionOfDim(en.index())
@@ -725,6 +726,32 @@ AffineApplyOp mlir::makeComposedAffineApply(OpBuilder &b, Location loc,
   return makeComposedAffineApply(
       b, loc, AffineMap::inferFromExprList(ArrayRef<AffineExpr>{e}).front(),
       values);
+}
+
+/// Fully compose map with operands and canonicalize the result.
+/// Return the `createOrFold`'ed AffineApply op.
+static Value createFoldedComposedAffineApply(OpBuilder &b, Location loc,
+                                             AffineMap map,
+                                             ValueRange operandsRef) {
+  SmallVector<Value, 4> operands(operandsRef.begin(), operandsRef.end());
+  fullyComposeAffineMapAndOperands(&map, &operands);
+  canonicalizeMapAndOperands(&map, &operands);
+  return b.createOrFold<AffineApplyOp>(loc, map, operands);
+}
+
+SmallVector<Value, 4> mlir::applyMapToValues(OpBuilder &b, Location loc,
+                                             AffineMap map, ValueRange values) {
+  SmallVector<Value, 4> res;
+  res.reserve(map.getNumResults());
+  unsigned numDims = map.getNumDims(), numSym = map.getNumSymbols();
+  // For each `expr` in `map`, applies the `expr` to the values extracted from
+  // ranges. If the resulting application can be folded into a Value, the
+  // folding occurs eagerly.
+  for (auto expr : map.getResults()) {
+    AffineMap map = AffineMap::get(numDims, numSym, expr);
+    res.push_back(createFoldedComposedAffineApply(b, loc, map, values));
+  }
+  return res;
 }
 
 // A symbol may appear as a dim in affine.apply operations. This function
@@ -943,7 +970,7 @@ void SimplifyAffineOp<AffineOpTy>::replaceAffineOp(
     ArrayRef<Value> mapOperands) const {
   rewriter.replaceOpWithNewOp<AffineOpTy>(op, map, mapOperands);
 }
-} // end anonymous namespace.
+} // namespace
 
 void AffineApplyOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                                 MLIRContext *context) {
@@ -1252,9 +1279,10 @@ void AffineForOp::build(OpBuilder &builder, OperationState &result,
   Region *bodyRegion = result.addRegion();
   bodyRegion->push_back(new Block);
   Block &bodyBlock = bodyRegion->front();
-  Value inductionVar = bodyBlock.addArgument(builder.getIndexType());
+  Value inductionVar =
+      bodyBlock.addArgument(builder.getIndexType(), result.location);
   for (Value val : iterArgs)
-    bodyBlock.addArgument(val.getType());
+    bodyBlock.addArgument(val.getType(), val.getLoc());
 
   // Create the default terminator if the builder is not provided and if the
   // iteration arguments are not provided. Otherwise, leave this to the caller
@@ -1356,7 +1384,7 @@ static ParseResult parseBound(bool isLower, OperationState &result,
   }
 
   // Get the attribute location.
-  llvm::SMLoc attrLoc = p.getCurrentLocation();
+  SMLoc attrLoc = p.getCurrentLocation();
 
   Attribute boundAttr;
   if (p.parseAttribute(boundAttr, builder.getIndexType(), boundAttrName,
@@ -1430,7 +1458,7 @@ static ParseResult parseAffineForOp(OpAsmParser &parser,
         AffineForOp::getStepAttrName(),
         builder.getIntegerAttr(builder.getIndexType(), /*value=*/1));
   } else {
-    llvm::SMLoc stepLoc = parser.getCurrentLocation();
+    SMLoc stepLoc = parser.getCurrentLocation();
     IntegerAttr stepAttr;
     if (parser.parseAttribute(stepAttr, builder.getIndexType(),
                               AffineForOp::getStepAttrName().data(),
@@ -1551,6 +1579,7 @@ static void print(OpAsmPrinter &p, AffineForOp op) {
     printBlockTerminators = true;
   }
 
+  p << ' ';
   p.printRegion(op.region(),
                 /*printEntryBlockArgs=*/false, printBlockTerminators);
   p.printOptionalAttrDict(op->getAttrs(),
@@ -1650,7 +1679,7 @@ struct AffineForEmptyLoopFolder : public OpRewritePattern<AffineForOp> {
     return success();
   }
 };
-} // end anonymous namespace
+} // namespace
 
 void AffineForOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                               MLIRContext *context) {
@@ -1937,7 +1966,7 @@ AffineForOp mlir::replaceForOpWithNewYields(OpBuilder &b, AffineForOp loop,
   // Take the body of the original parent loop.
   newLoop.getLoopBody().takeBody(loop.getLoopBody());
   for (Value val : newIterArgs)
-    newLoop.getLoopBody().addArgument(val.getType());
+    newLoop.getLoopBody().addArgument(val.getType(), val.getLoc());
 
   // Update yield operation with new values to be added.
   if (!newYieldedValues.empty()) {
@@ -2032,7 +2061,7 @@ struct AlwaysTrueOrFalseIf : public OpRewritePattern<AffineIfOp> {
     return success();
   }
 };
-} // end anonymous namespace.
+} // namespace
 
 static LogicalResult verify(AffineIfOp op) {
   // Verify that we have a condition attribute.
@@ -2115,6 +2144,7 @@ static void print(OpAsmPrinter &p, AffineIfOp op) {
   printDimAndSymbolList(op.operand_begin(), op.operand_end(),
                         conditionAttr.getValue().getNumDims(), p);
   p.printOptionalArrowTypeList(op.getResultTypes());
+  p << ' ';
   p.printRegion(op.thenRegion(),
                 /*printEntryBlockArgs=*/false,
                 /*printBlockTerminators=*/op.getNumResults());
@@ -2122,7 +2152,7 @@ static void print(OpAsmPrinter &p, AffineIfOp op) {
   // Print the 'else' regions if it has any blocks.
   auto &elseRegion = op.elseRegion();
   if (!elseRegion.empty()) {
-    p << " else";
+    p << " else ";
     p.printRegion(elseRegion,
                   /*printEntryBlockArgs=*/false,
                   /*printBlockTerminators=*/op.getNumResults());
@@ -2384,11 +2414,11 @@ static void print(OpAsmPrinter &p, AffineStoreOp op) {
 }
 
 LogicalResult verify(AffineStoreOp op) {
-  // First operand must have same type as memref element type.
+  // The value to store must have the same type as memref element type.
   auto memrefType = op.getMemRefType();
   if (op.getValueToStore().getType() != memrefType.getElementType())
     return op.emitOpError(
-        "first operand must have same type memref element type");
+        "value to store must have the same type as memref element type");
 
   if (failed(verifyMemoryOpIndexing(
           op.getOperation(),
@@ -2415,8 +2445,7 @@ LogicalResult AffineStoreOp::fold(ArrayRef<Attribute> cstOperands,
 // AffineMinMaxOpBase
 //===----------------------------------------------------------------------===//
 
-template <typename T>
-static LogicalResult verifyAffineMinMaxOp(T op) {
+template <typename T> static LogicalResult verifyAffineMinMaxOp(T op) {
   // Verify that operand count matches affine map dimension and symbol count.
   if (op.getNumOperands() != op.map().getNumDims() + op.map().getNumSymbols())
     return op.emitOpError(
@@ -2424,8 +2453,7 @@ static LogicalResult verifyAffineMinMaxOp(T op) {
   return success();
 }
 
-template <typename T>
-static void printAffineMinMaxOp(OpAsmPrinter &p, T op) {
+template <typename T> static void printAffineMinMaxOp(OpAsmPrinter &p, T op) {
   p << ' ' << op->getAttr(T::getMapAttrName());
   auto operands = op.getOperands();
   unsigned numDims = op.map().getNumDims();
@@ -2532,8 +2560,7 @@ struct DeduplicateAffineMinMaxExpressions : public OpRewritePattern<T> {
 ///
 ///   %1 = affine.min affine_map<
 ///          ()[s0, s1] -> (s0 + 4, s1 + 16, s1 * 8)> ()[%sym2, %sym1]
-template <typename T>
-struct MergeAffineMinMaxOp : public OpRewritePattern<T> {
+template <typename T> struct MergeAffineMinMaxOp : public OpRewritePattern<T> {
   using OpRewritePattern<T>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(T affineOp,
@@ -2777,7 +2804,7 @@ LogicalResult AffinePrefetchOp::fold(ArrayRef<Attribute> cstOperands,
 
 void AffineParallelOp::build(OpBuilder &builder, OperationState &result,
                              TypeRange resultTypes,
-                             ArrayRef<AtomicRMWKind> reductions,
+                             ArrayRef<arith::AtomicRMWKind> reductions,
                              ArrayRef<int64_t> ranges) {
   SmallVector<AffineMap> lbs(ranges.size(), builder.getConstantAffineMap(0));
   auto ubs = llvm::to_vector<4>(llvm::map_range(ranges, [&](int64_t value) {
@@ -2790,7 +2817,7 @@ void AffineParallelOp::build(OpBuilder &builder, OperationState &result,
 
 void AffineParallelOp::build(OpBuilder &builder, OperationState &result,
                              TypeRange resultTypes,
-                             ArrayRef<AtomicRMWKind> reductions,
+                             ArrayRef<arith::AtomicRMWKind> reductions,
                              ArrayRef<AffineMap> lbMaps, ValueRange lbArgs,
                              ArrayRef<AffineMap> ubMaps, ValueRange ubArgs,
                              ArrayRef<int64_t> steps) {
@@ -2819,7 +2846,7 @@ void AffineParallelOp::build(OpBuilder &builder, OperationState &result,
 
   // Convert the reductions to integer attributes.
   SmallVector<Attribute, 4> reductionAttrs;
-  for (AtomicRMWKind reduction : reductions)
+  for (arith::AtomicRMWKind reduction : reductions)
     reductionAttrs.push_back(
         builder.getI64IntegerAttr(static_cast<int64_t>(reduction)));
   result.addAttribute(getReductionsAttrName(),
@@ -2861,7 +2888,7 @@ void AffineParallelOp::build(OpBuilder &builder, OperationState &result,
   auto *body = new Block();
   // Add all the block arguments.
   for (unsigned i = 0, e = steps.size(); i < e; ++i)
-    body->addArgument(IndexType::get(builder.getContext()));
+    body->addArgument(IndexType::get(builder.getContext()), result.location);
   bodyRegion->push_back(body);
   if (resultTypes.empty())
     ensureTerminator(*bodyRegion, builder, result.location);
@@ -2890,19 +2917,19 @@ AffineParallelOp::operand_range AffineParallelOp::getUpperBoundsOperands() {
 }
 
 AffineMap AffineParallelOp::getLowerBoundMap(unsigned pos) {
+  auto values = lowerBoundsGroups().getValues<int32_t>();
   unsigned start = 0;
   for (unsigned i = 0; i < pos; ++i)
-    start += lowerBoundsGroups().getValue<int32_t>(i);
-  return lowerBoundsMap().getSliceMap(
-      start, lowerBoundsGroups().getValue<int32_t>(pos));
+    start += values[i];
+  return lowerBoundsMap().getSliceMap(start, values[pos]);
 }
 
 AffineMap AffineParallelOp::getUpperBoundMap(unsigned pos) {
+  auto values = upperBoundsGroups().getValues<int32_t>();
   unsigned start = 0;
   for (unsigned i = 0; i < pos; ++i)
-    start += upperBoundsGroups().getValue<int32_t>(i);
-  return upperBoundsMap().getSliceMap(
-      start, upperBoundsGroups().getValue<int32_t>(pos));
+    start += values[i];
+  return upperBoundsMap().getSliceMap(start, values[pos]);
 }
 
 AffineValueMap AffineParallelOp::getLowerBoundsValueMap() {
@@ -3026,7 +3053,7 @@ static LogicalResult verify(AffineParallelOp op) {
   // Verify reduction  ops are all valid
   for (Attribute attr : op.reductions()) {
     auto intAttr = attr.dyn_cast<IntegerAttr>();
-    if (!intAttr || !symbolizeAtomicRMWKind(intAttr.getInt()))
+    if (!intAttr || !arith::symbolizeAtomicRMWKind(intAttr.getInt()))
       return op.emitOpError("invalid reduction attribute");
   }
 
@@ -3126,13 +3153,14 @@ static void print(OpAsmPrinter &p, AffineParallelOp op) {
   if (op.getNumResults()) {
     p << " reduce (";
     llvm::interleaveComma(op.reductions(), p, [&](auto &attr) {
-      AtomicRMWKind sym =
-          *symbolizeAtomicRMWKind(attr.template cast<IntegerAttr>().getInt());
-      p << "\"" << stringifyAtomicRMWKind(sym) << "\"";
+      arith::AtomicRMWKind sym = *arith::symbolizeAtomicRMWKind(
+          attr.template cast<IntegerAttr>().getInt());
+      p << "\"" << arith::stringifyAtomicRMWKind(sym) << "\"";
     });
     p << ") -> (" << op.getResultTypes() << ")";
   }
 
+  p << ' ';
   p.printRegion(op.region(), /*printEntryBlockArgs=*/false,
                 /*printBlockTerminators=*/op.getNumResults());
   p.printOptionalAttrDict(
@@ -3350,8 +3378,8 @@ static ParseResult parseAffineParallelOp(OpAsmParser &parser,
       if (parser.parseAttribute(attrVal, builder.getNoneType(), "reduce",
                                 attrStorage))
         return failure();
-      llvm::Optional<AtomicRMWKind> reduction =
-          symbolizeAtomicRMWKind(attrVal.getValue());
+      llvm::Optional<arith::AtomicRMWKind> reduction =
+          arith::symbolizeAtomicRMWKind(attrVal.getValue());
       if (!reduction)
         return parser.emitError(loc, "invalid reduction value: ") << attrVal;
       reductions.push_back(builder.getI64IntegerAttr(

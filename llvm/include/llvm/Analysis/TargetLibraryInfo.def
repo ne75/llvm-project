@@ -391,6 +391,19 @@ TLI_DEFINE_STRING_INTERNAL("__powf_finite")
 /// long double __powl_finite(long double x, long double y);
 TLI_DEFINE_ENUM_INTERNAL(powl_finite)
 TLI_DEFINE_STRING_INTERNAL("__powl_finite")
+
+TLI_DEFINE_ENUM_INTERNAL(rust_alloc)
+TLI_DEFINE_STRING_INTERNAL("__rust_alloc")
+
+TLI_DEFINE_ENUM_INTERNAL(rust_alloc_zeroed)
+TLI_DEFINE_STRING_INTERNAL("__rust_alloc_zeroed")
+
+TLI_DEFINE_ENUM_INTERNAL(rust_dealloc)
+TLI_DEFINE_STRING_INTERNAL("__rust_dealloc")
+
+TLI_DEFINE_ENUM_INTERNAL(rust_realloc)
+TLI_DEFINE_STRING_INTERNAL("__rust_realloc")
+
 /// double __sincospi_stret(double x);
 TLI_DEFINE_ENUM_INTERNAL(sincospi_stret)
 TLI_DEFINE_STRING_INTERNAL("__sincospi_stret")
@@ -1048,6 +1061,12 @@ TLI_DEFINE_STRING_INTERNAL("memset")
 /// void memset_pattern16(void *b, const void *pattern16, size_t len);
 TLI_DEFINE_ENUM_INTERNAL(memset_pattern16)
 TLI_DEFINE_STRING_INTERNAL("memset_pattern16")
+/// void memset_pattern4(void *b, const void *pattern4, size_t len);
+TLI_DEFINE_ENUM_INTERNAL(memset_pattern4)
+TLI_DEFINE_STRING_INTERNAL("memset_pattern4")
+/// void memset_pattern8(void *b, const void *pattern8, size_t len);
+TLI_DEFINE_ENUM_INTERNAL(memset_pattern8)
+TLI_DEFINE_STRING_INTERNAL("memset_pattern8")
 /// int mkdir(const char *path, mode_t mode);
 TLI_DEFINE_ENUM_INTERNAL(mkdir)
 TLI_DEFINE_STRING_INTERNAL("mkdir")

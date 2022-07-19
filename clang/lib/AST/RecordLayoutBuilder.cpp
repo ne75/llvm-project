@@ -2021,6 +2021,7 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
   CharUnits UnpackedFieldAlign =
       !DefaultsToAIXPowerAlignment ? FieldAlign : PreferredAlign;
   CharUnits UnpackedFieldOffset = FieldOffset;
+  CharUnits OriginalFieldAlign = UnpackedFieldAlign;
 
   if (FieldPacked) {
     FieldAlign = CharUnits::One();
@@ -2105,6 +2106,22 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
   // Remember max struct/class ABI-specified alignment.
   UnadjustedAlignment = std::max(UnadjustedAlignment, FieldAlign);
   UpdateAlignment(FieldAlign, UnpackedFieldAlign, PreferredAlign);
+
+  // For checking the alignment of inner fields against
+  // the alignment of its parent record.
+  if (const RecordDecl *RD = D->getParent()) {
+    // Check if packed attribute or pragma pack is present.
+    if (RD->hasAttr<PackedAttr>() || !MaxFieldAlignment.isZero())
+      if (FieldAlign < OriginalFieldAlign)
+        if (D->getType()->isRecordType()) {
+          // If the offset is a multiple of the alignment of
+          // the type, raise the warning.
+          // TODO: Takes no account the alignment of the outer struct
+          if (FieldOffset % OriginalFieldAlign != 0)
+            Diag(D->getLocation(), diag::warn_unaligned_access)
+                << Context.getTypeDeclType(RD) << D->getName() << D->getType();
+        }
+  }
 }
 
 void ItaniumRecordLayoutBuilder::FinishLayout(const NamedDecl *D) {
@@ -3091,7 +3108,7 @@ void MicrosoftRecordLayoutBuilder::layoutVirtualBases(const CXXRecordDecl *RD) {
   for (const CXXBaseSpecifier &VBase : RD->vbases()) {
     const CXXRecordDecl *BaseDecl = VBase.getType()->getAsCXXRecordDecl();
     const ASTRecordLayout &BaseLayout = Context.getASTRecordLayout(BaseDecl);
-    bool HasVtordisp = HasVtorDispSet.count(BaseDecl) > 0;
+    bool HasVtordisp = HasVtorDispSet.contains(BaseDecl);
     // Insert padding between two bases if the left first one is zero sized or
     // contains a zero sized subobject and the right is zero sized or one leads
     // with a zero sized base.  The padding between virtual bases is 4

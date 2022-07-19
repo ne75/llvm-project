@@ -29,11 +29,6 @@ class FileSystem;
 } // namespace llvm
 
 namespace clang {
-
-class Lexer;
-class SourceManager;
-class DiagnosticConsumer;
-
 namespace format {
 
 enum class ParseError {
@@ -87,6 +82,19 @@ struct FormatStyle {
     ///       argument1, argument2);
     /// \endcode
     BAS_AlwaysBreak,
+    /// Always break after an open bracket, if the parameters don't fit
+    /// on a single line. Closing brackets will be placed on a new line.
+    /// E.g.:
+    /// \code
+    ///   someLongFunction(
+    ///       argument1, argument2
+    ///   )
+    /// \endcode
+    ///
+    /// \warning
+    ///  Note: This currently only applies to parentheses.
+    /// \endwarning
+    BAS_BlockIndent,
   };
 
   /// If ``true``, horizontally aligns arguments after an open bracket.
@@ -2669,6 +2677,7 @@ struct FormatStyle {
   bool isCpp() const { return Language == LK_Cpp || Language == LK_ObjC; }
   bool isCSharp() const { return Language == LK_CSharp; }
   bool isJson() const { return Language == LK_Json; }
+  bool isJavaScript() const { return Language == LK_JavaScript; }
 
   /// Language, this format style is targeted at.
   /// \version 3.5
@@ -2703,7 +2712,7 @@ struct FormatStyle {
   /// readability to have the signature indented two levels and to use
   /// ``OuterScope``. The KJ style guide requires ``OuterScope``.
   /// `KJ style guide
-  /// <https://github.com/capnproto/capnproto/blob/master/kjdoc/style-guide.md>`_
+  /// <https://github.com/capnproto/capnproto/blob/master/style-guide.md>`_
   /// \version 13
   LambdaBodyIndentationKind LambdaBodyIndentation;
 
@@ -2886,6 +2895,10 @@ struct FormatStyle {
   /// \version 3.7
   unsigned PenaltyBreakFirstLessLess;
 
+  /// The penalty for breaking after ``(``.
+  /// \version 14
+  unsigned PenaltyBreakOpenParenthesis;
+
   /// The penalty for each line break introduced inside a string literal.
   /// \version 3.7
   unsigned PenaltyBreakString;
@@ -3048,6 +3061,118 @@ struct FormatStyle {
   /// \version 4
   bool ReflowComments;
   // clang-format on
+
+  /// Remove optional braces of control statements (``if``, ``else``, ``for``,
+  /// and ``while``) in C++ according to the LLVM coding style.
+  /// \warning
+  ///  This option will be renamed and expanded to support other styles.
+  /// \endwarning
+  /// \warning
+  ///  Setting this option to `true` could lead to incorrect code formatting due
+  ///  to clang-format's lack of complete semantic information. As such, extra
+  ///  care should be taken to review code changes made by this option.
+  /// \endwarning
+  /// \code
+  ///   false:                                     true:
+  ///
+  ///   if (isa<FunctionDecl>(D)) {        vs.     if (isa<FunctionDecl>(D))
+  ///     handleFunctionDecl(D);                     handleFunctionDecl(D);
+  ///   } else if (isa<VarDecl>(D)) {              else if (isa<VarDecl>(D))
+  ///     handleVarDecl(D);                          handleVarDecl(D);
+  ///   }
+  ///
+  ///   if (isa<VarDecl>(D)) {             vs.     if (isa<VarDecl>(D)) {
+  ///     for (auto *A : D.attrs()) {                for (auto *A : D.attrs())
+  ///       if (shouldProcessAttr(A)) {                if (shouldProcessAttr(A))
+  ///         handleAttr(A);                             handleAttr(A);
+  ///       }                                      }
+  ///     }
+  ///   }
+  ///
+  ///   if (isa<FunctionDecl>(D)) {        vs.     if (isa<FunctionDecl>(D))
+  ///     for (auto *A : D.attrs()) {                for (auto *A : D.attrs())
+  ///       handleAttr(A);                             handleAttr(A);
+  ///     }
+  ///   }
+  ///
+  ///   if (auto *D = (T)(D)) {            vs.     if (auto *D = (T)(D)) {
+  ///     if (shouldProcess(D)) {                    if (shouldProcess(D))
+  ///       handleVarDecl(D);                          handleVarDecl(D);
+  ///     } else {                                   else
+  ///       markAsIgnored(D);                          markAsIgnored(D);
+  ///     }                                        }
+  ///   }
+  ///
+  ///   if (a) {                           vs.     if (a)
+  ///     b();                                       b();
+  ///   } else {                                   else if (c)
+  ///     if (c) {                                   d();
+  ///       d();                                   else
+  ///     } else {                                   e();
+  ///       e();
+  ///     }
+  ///   }
+  /// \endcode
+  /// \version 14
+  bool RemoveBracesLLVM;
+
+  /// \brief The style if definition blocks should be separated.
+  enum SeparateDefinitionStyle {
+    /// Leave definition blocks as they are.
+    SDS_Leave,
+    /// Insert an empty line between definition blocks.
+    SDS_Always,
+    /// Remove any empty line between definition blocks.
+    SDS_Never
+  };
+
+  /// Specifies the use of empty lines to separate definition blocks, including
+  /// classes, structs, enums, and functions.
+  /// \code
+  ///    Never                  v.s.     Always
+  ///    #include <cstring>              #include <cstring>
+  ///    struct Foo {
+  ///      int a, b, c;                  struct Foo {
+  ///    };                                int a, b, c;
+  ///    namespace Ns {                  };
+  ///    class Bar {
+  ///    public:                         namespace Ns {
+  ///      struct Foobar {               class Bar {
+  ///        int a;                      public:
+  ///        int b;                        struct Foobar {
+  ///      };                                int a;
+  ///    private:                            int b;
+  ///      int t;                          };
+  ///      int method1() {
+  ///        // ...                      private:
+  ///      }                               int t;
+  ///      enum List {
+  ///        ITEM1,                        int method1() {
+  ///        ITEM2                           // ...
+  ///      };                              }
+  ///      template<typename T>
+  ///      int method2(T x) {              enum List {
+  ///        // ...                          ITEM1,
+  ///      }                                 ITEM2
+  ///      int i, j, k;                    };
+  ///      int method3(int par) {
+  ///        // ...                        template<typename T>
+  ///      }                               int method2(T x) {
+  ///    };                                  // ...
+  ///    class C {};                       }
+  ///    }
+  ///                                      int i, j, k;
+  ///
+  ///                                      int method3(int par) {
+  ///                                        // ...
+  ///                                      }
+  ///                                    };
+  ///
+  ///                                    class C {};
+  ///                                    }
+  /// \endcode
+  /// \version 14
+  SeparateDefinitionStyle SeparateDefinitionBlocks;
 
   /// The maximal number of unwrapped lines that a short namespace spans.
   /// Defaults to 1.
@@ -3258,7 +3383,7 @@ struct FormatStyle {
   bool SpaceBeforeInheritanceColon;
 
   /// Different ways to put a space before opening parentheses.
-  enum SpaceBeforeParensOptions : unsigned char {
+  enum SpaceBeforeParensStyle : unsigned char {
     /// Never put a space before opening parentheses.
     /// \code
     ///    void f() {
@@ -3313,12 +3438,109 @@ struct FormatStyle {
     ///      }
     ///    }
     /// \endcode
-    SBPO_Always
+    SBPO_Always,
+    /// Configure each individual space before parentheses in
+    /// `SpaceBeforeParensOptions`.
+    SBPO_Custom,
   };
 
   /// Defines in which cases to put a space before opening parentheses.
   /// \version 3.5
-  SpaceBeforeParensOptions SpaceBeforeParens;
+  SpaceBeforeParensStyle SpaceBeforeParens;
+
+  /// Precise control over the spacing before parentheses.
+  /// \code
+  ///   # Should be declared this way:
+  ///   SpaceBeforeParens: Custom
+  ///   SpaceBeforeParensOptions:
+  ///     AfterControlStatements: true
+  ///     AfterFunctionDefinitionName: true
+  /// \endcode
+  struct SpaceBeforeParensCustom {
+    /// If ``true``, put space betwee control statement keywords
+    /// (for/if/while...) and opening parentheses.
+    /// \code
+    ///    true:                                  false:
+    ///    if (...) {}                     vs.    if(...) {}
+    /// \endcode
+    bool AfterControlStatements;
+    /// If ``true``, put space between foreach macros and opening parentheses.
+    /// \code
+    ///    true:                                  false:
+    ///    FOREACH (...)                   vs.    FOREACH(...)
+    ///      <loop-body>                            <loop-body>
+    /// \endcode
+    bool AfterForeachMacros;
+    /// If ``true``, put a space between function declaration name and opening
+    /// parentheses.
+    /// \code
+    ///    true:                                  false:
+    ///    void f ();                      vs.    void f();
+    /// \endcode
+    bool AfterFunctionDeclarationName;
+    /// If ``true``, put a space between function definition name and opening
+    /// parentheses.
+    /// \code
+    ///    true:                                  false:
+    ///    void f () {}                    vs.    void f() {}
+    /// \endcode
+    bool AfterFunctionDefinitionName;
+    /// If ``true``, put space between if macros and opening parentheses.
+    /// \code
+    ///    true:                                  false:
+    ///    IF (...)                        vs.    IF(...)
+    ///      <conditional-body>                     <conditional-body>
+    /// \endcode
+    bool AfterIfMacros;
+    /// If ``true``, put a space between operator overloading and opening
+    /// parentheses.
+    /// \code
+    ///    true:                                  false:
+    ///    void operator++ (int a);        vs.    void operator++(int a);
+    ///    object.operator++ (10);                object.operator++(10);
+    /// \endcode
+    bool AfterOverloadedOperator;
+    /// If ``true``, put a space before opening parentheses only if the
+    /// parentheses are not empty.
+    /// \code
+    ///    true:                                  false:
+    ///    void f (int a);                 vs.    void f();
+    ///    f (a);                                 f();
+    /// \endcode
+    bool BeforeNonEmptyParentheses;
+
+    SpaceBeforeParensCustom()
+        : AfterControlStatements(false), AfterForeachMacros(false),
+          AfterFunctionDeclarationName(false),
+          AfterFunctionDefinitionName(false), AfterIfMacros(false),
+          AfterOverloadedOperator(false), BeforeNonEmptyParentheses(false) {}
+
+    bool operator==(const SpaceBeforeParensCustom &Other) const {
+      return AfterControlStatements == Other.AfterControlStatements &&
+             AfterForeachMacros == Other.AfterForeachMacros &&
+             AfterFunctionDeclarationName ==
+                 Other.AfterFunctionDeclarationName &&
+             AfterFunctionDefinitionName == Other.AfterFunctionDefinitionName &&
+             AfterIfMacros == Other.AfterIfMacros &&
+             AfterOverloadedOperator == Other.AfterOverloadedOperator &&
+             BeforeNonEmptyParentheses == Other.BeforeNonEmptyParentheses;
+    }
+  };
+
+  /// Control of individual space before parentheses.
+  ///
+  /// If ``SpaceBeforeParens`` is set to ``Custom``, use this to specify
+  /// how each individual space before parentheses case should be handled.
+  /// Otherwise, this is ignored.
+  /// \code{.yaml}
+  ///   # Example of usage:
+  ///   SpaceBeforeParens: Custom
+  ///   SpaceBeforeParensOptions:
+  ///     AfterControlStatements: true
+  ///     AfterFunctionDefinitionName: true
+  /// \endcode
+  /// \version 14
+  SpaceBeforeParensCustom SpaceBeforeParensOptions;
 
   /// If ``false``, spaces will be removed before range-based for loop
   /// colon.
@@ -3430,29 +3652,31 @@ struct FormatStyle {
   /// How many spaces are allowed at the start of a line comment. To disable the
   /// maximum set it to ``-1``, apart from that the maximum takes precedence
   /// over the minimum.
-  /// \code Minimum = 1 Maximum = -1
-  /// // One space is forced
+  /// \code
+  ///   Minimum = 1
+  ///   Maximum = -1
+  ///   // One space is forced
   ///
-  /// //  but more spaces are possible
+  ///   //  but more spaces are possible
   ///
-  /// Minimum = 0
-  /// Maximum = 0
-  /// //Forces to start every comment directly after the slashes
+  ///   Minimum = 0
+  ///   Maximum = 0
+  ///   //Forces to start every comment directly after the slashes
   /// \endcode
   ///
   /// Note that in line comment sections the relative indent of the subsequent
   /// lines is kept, that means the following:
   /// \code
-  /// before:                                   after:
-  /// Minimum: 1
-  /// //if (b) {                                // if (b) {
-  /// //  return true;                          //   return true;
-  /// //}                                       // }
+  ///   before:                                   after:
+  ///   Minimum: 1
+  ///   //if (b) {                                // if (b) {
+  ///   //  return true;                          //   return true;
+  ///   //}                                       // }
   ///
-  /// Maximum: 0
-  /// /// List:                                 ///List:
-  /// ///  - Foo                                /// - Foo
-  /// ///    - Bar                              ///   - Bar
+  ///   Maximum: 0
+  ///   /// List:                                 ///List:
+  ///   ///  - Foo                                /// - Foo
+  ///   ///    - Bar                              ///   - Bar
   /// \endcode
   /// \version 14
   SpacesInLineComment SpacesInLineCommentPrefix;
@@ -3690,6 +3914,7 @@ struct FormatStyle {
                R.PenaltyBreakBeforeFirstCallParameter &&
            PenaltyBreakComment == R.PenaltyBreakComment &&
            PenaltyBreakFirstLessLess == R.PenaltyBreakFirstLessLess &&
+           PenaltyBreakOpenParenthesis == R.PenaltyBreakOpenParenthesis &&
            PenaltyBreakString == R.PenaltyBreakString &&
            PenaltyExcessCharacter == R.PenaltyExcessCharacter &&
            PenaltyReturnTypeOnItsOwnLine == R.PenaltyReturnTypeOnItsOwnLine &&
@@ -3700,6 +3925,8 @@ struct FormatStyle {
            QualifierOrder == R.QualifierOrder &&
            RawStringFormats == R.RawStringFormats &&
            ReferenceAlignment == R.ReferenceAlignment &&
+           RemoveBracesLLVM == R.RemoveBracesLLVM &&
+           SeparateDefinitionBlocks == R.SeparateDefinitionBlocks &&
            ShortNamespaceLines == R.ShortNamespaceLines &&
            SortIncludes == R.SortIncludes &&
            SortJavaStaticImport == R.SortJavaStaticImport &&
@@ -3713,6 +3940,7 @@ struct FormatStyle {
                R.SpaceBeforeCtorInitializerColon &&
            SpaceBeforeInheritanceColon == R.SpaceBeforeInheritanceColon &&
            SpaceBeforeParens == R.SpaceBeforeParens &&
+           SpaceBeforeParensOptions == R.SpaceBeforeParensOptions &&
            SpaceAroundPointerQualifiers == R.SpaceAroundPointerQualifiers &&
            SpaceBeforeRangeBasedForLoopColon ==
                R.SpaceBeforeRangeBasedForLoopColon &&
@@ -3796,7 +4024,7 @@ FormatStyle getGoogleStyle(FormatStyle::LanguageKind Language);
 FormatStyle getChromiumStyle(FormatStyle::LanguageKind Language);
 
 /// Returns a format style complying with Mozilla's style guide:
-/// https://developer.mozilla.org/en-US/docs/Developer_Guide/Coding_Style.
+/// https://firefox-source-docs.mozilla.org/code-quality/coding-style/index.html.
 FormatStyle getMozillaStyle();
 
 /// Returns a format style complying with Webkit's style guide:
@@ -3936,6 +4164,17 @@ tooling::Replacements fixNamespaceEndComments(const FormatStyle &Style,
                                               ArrayRef<tooling::Range> Ranges,
                                               StringRef FileName = "<stdin>");
 
+/// Inserts or removes empty lines separating definition blocks including
+/// classes, structs, functions, namespaces, and enums in the given \p Ranges in
+/// \p Code.
+///
+/// Returns the ``Replacements`` that inserts or removes empty lines separating
+/// definition blocks in all \p Ranges in \p Code.
+tooling::Replacements separateDefinitionBlocks(const FormatStyle &Style,
+                                               StringRef Code,
+                                               ArrayRef<tooling::Range> Ranges,
+                                               StringRef FileName = "<stdin>");
+
 /// Sort consecutive using declarations in the given \p Ranges in
 /// \p Code.
 ///
@@ -3974,6 +4213,8 @@ extern const char *DefaultFallbackStyle;
 /// * "file" - Load style configuration from a file called ``.clang-format``
 /// located in one of the parent directories of ``FileName`` or the current
 /// directory if ``FileName`` is empty.
+/// * "file:<format_file_path>" to explicitly specify the configuration file to
+/// use.
 ///
 /// \param[in] StyleName Style name to interpret according to the description
 /// above.

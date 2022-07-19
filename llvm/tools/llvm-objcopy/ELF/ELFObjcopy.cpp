@@ -227,6 +227,41 @@ static Error replaceDebugSections(
   return Obj.replaceSections(FromTo);
 }
 
+static bool isAArch64MappingSymbol(const Symbol &Sym) {
+  if (Sym.Binding != STB_LOCAL || Sym.Type != STT_NOTYPE ||
+      Sym.getShndx() == SHN_UNDEF)
+    return false;
+  StringRef Name = Sym.Name;
+  if (!Name.consume_front("$x") && !Name.consume_front("$d"))
+    return false;
+  return Name.empty() || Name.startswith(".");
+}
+
+static bool isArmMappingSymbol(const Symbol &Sym) {
+  if (Sym.Binding != STB_LOCAL || Sym.Type != STT_NOTYPE ||
+      Sym.getShndx() == SHN_UNDEF)
+    return false;
+  StringRef Name = Sym.Name;
+  if (!Name.consume_front("$a") && !Name.consume_front("$d") &&
+      !Name.consume_front("$t"))
+    return false;
+  return Name.empty() || Name.startswith(".");
+}
+
+// Check if the symbol should be preserved because it is required by ABI.
+static bool isRequiredByABISymbol(const Object &Obj, const Symbol &Sym) {
+  switch (Obj.Machine) {
+  case EM_AARCH64:
+    // Mapping symbols should be preserved for a relocatable object file.
+    return Obj.isRelocatable() && isAArch64MappingSymbol(Sym);
+  case EM_ARM:
+    // Mapping symbols should be preserved for a relocatable object file.
+    return Obj.isRelocatable() && isArmMappingSymbol(Sym);
+  default:
+    return false;
+  }
+}
+
 static bool isUnneededSymbol(const Symbol &Sym) {
   return !Sym.Referenced &&
          (Sym.Binding == STB_LOCAL || Sym.getShndx() == SHN_UNDEF) &&
@@ -297,20 +332,23 @@ static Error updateAndRemoveSymbols(const CommonConfig &Config,
         (ELFConfig.KeepFileSymbols && Sym.Type == STT_FILE))
       return false;
 
-    if ((Config.DiscardMode == DiscardType::All ||
-         (Config.DiscardMode == DiscardType::Locals &&
-          StringRef(Sym.Name).startswith(".L"))) &&
-        Sym.Binding == STB_LOCAL && Sym.getShndx() != SHN_UNDEF &&
-        Sym.Type != STT_FILE && Sym.Type != STT_SECTION)
+    if (Config.SymbolsToRemove.matches(Sym.Name))
       return true;
 
     if (Config.StripAll || Config.StripAllGNU)
       return true;
 
+    if (isRequiredByABISymbol(Obj, Sym))
+      return false;
+
     if (Config.StripDebug && Sym.Type == STT_FILE)
       return true;
 
-    if (Config.SymbolsToRemove.matches(Sym.Name))
+    if ((Config.DiscardMode == DiscardType::All ||
+         (Config.DiscardMode == DiscardType::Locals &&
+          StringRef(Sym.Name).startswith(".L"))) &&
+        Sym.Binding == STB_LOCAL && Sym.getShndx() != SHN_UNDEF &&
+        Sym.Type != STT_FILE && Sym.Type != STT_SECTION)
       return true;
 
     if ((Config.StripUnneeded ||
@@ -548,6 +586,22 @@ static void addSymbol(Object &Obj, const NewSymbolInfo &SymInfo,
       Sec ? (uint16_t)SYMBOL_SIMPLE_INDEX : (uint16_t)SHN_ABS, 0);
 }
 
+static Error
+handleUserSection(StringRef Flag,
+                  function_ref<Error(StringRef, ArrayRef<uint8_t>)> F) {
+  std::pair<StringRef, StringRef> SecPair = Flag.split("=");
+  StringRef SecName = SecPair.first;
+  StringRef File = SecPair.second;
+  ErrorOr<std::unique_ptr<MemoryBuffer>> BufOrErr = MemoryBuffer::getFile(File);
+  if (!BufOrErr)
+    return createFileError(File, errorCodeToError(BufOrErr.getError()));
+  std::unique_ptr<MemoryBuffer> Buf = std::move(*BufOrErr);
+  ArrayRef<uint8_t> Data(
+      reinterpret_cast<const uint8_t *>(Buf->getBufferStart()),
+      Buf->getBufferSize());
+  return F(SecName, Data);
+}
+
 // This function handles the high level operations of GNU objcopy including
 // handling command line options. It's important to outline certain properties
 // we expect to hold of the command line operations. Any operation that "keeps"
@@ -665,21 +719,23 @@ static Error handleArgs(const CommonConfig &Config, const ELFConfig &ELFConfig,
         Sec.Type = SHT_NOBITS;
 
   for (const auto &Flag : Config.AddSection) {
-    std::pair<StringRef, StringRef> SecPair = Flag.split("=");
-    StringRef SecName = SecPair.first;
-    StringRef File = SecPair.second;
-    ErrorOr<std::unique_ptr<MemoryBuffer>> BufOrErr =
-        MemoryBuffer::getFile(File);
-    if (!BufOrErr)
-      return createFileError(File, errorCodeToError(BufOrErr.getError()));
-    std::unique_ptr<MemoryBuffer> Buf = std::move(*BufOrErr);
-    ArrayRef<uint8_t> Data(
-        reinterpret_cast<const uint8_t *>(Buf->getBufferStart()),
-        Buf->getBufferSize());
-    OwnedDataSection &NewSection =
-        Obj.addSection<OwnedDataSection>(SecName, Data);
-    if (SecName.startswith(".note") && SecName != ".note.GNU-stack")
-      NewSection.Type = SHT_NOTE;
+    auto AddSection = [&](StringRef Name, ArrayRef<uint8_t> Data) {
+      OwnedDataSection &NewSection =
+          Obj.addSection<OwnedDataSection>(Name, Data);
+      if (Name.startswith(".note") && Name != ".note.GNU-stack")
+        NewSection.Type = SHT_NOTE;
+      return Error::success();
+    };
+    if (Error E = handleUserSection(Flag, AddSection))
+      return E;
+  }
+
+  for (StringRef Flag : Config.UpdateSection) {
+    auto UpdateSection = [&](StringRef Name, ArrayRef<uint8_t> Data) {
+      return Obj.updateSection(Name, Data);
+    };
+    if (Error E = handleUserSection(Flag, UpdateSection))
+      return E;
   }
 
   if (!Config.AddGnuDebugLink.empty())

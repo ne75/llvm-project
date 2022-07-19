@@ -47,7 +47,7 @@ class CommandObjectThreadBacktrace : public CommandObjectIterateOverThreads {
 public:
   class CommandOptions : public Options {
   public:
-    CommandOptions() : Options() {
+    CommandOptions() {
       // Keep default values of all options in one place: OptionParsingStarting
       // ()
       OptionParsingStarting(nullptr);
@@ -119,8 +119,7 @@ public:
             nullptr,
             eCommandRequiresProcess | eCommandRequiresThread |
                 eCommandTryTargetAPILock | eCommandProcessMustBeLaunched |
-                eCommandProcessMustBePaused),
-        m_options() {}
+                eCommandProcessMustBePaused) {}
 
   ~CommandObjectThreadBacktrace() override = default;
 
@@ -203,7 +202,7 @@ static constexpr OptionEnumValues TriRunningModes() {
 
 class ThreadStepScopeOptionGroup : public OptionGroup {
 public:
-  ThreadStepScopeOptionGroup() : OptionGroup() {
+  ThreadStepScopeOptionGroup() {
     // Keep default values of all options in one place: OptionParsingStarting
     // ()
     OptionParsingStarting(nullptr);
@@ -327,7 +326,7 @@ public:
                                 eCommandTryTargetAPILock |
                                 eCommandProcessMustBeLaunched |
                                 eCommandProcessMustBePaused),
-        m_step_type(step_type), m_step_scope(step_scope), m_options(),
+        m_step_type(step_type), m_step_scope(step_scope),
         m_class_options("scripted step") {
     CommandArgumentEntry arg;
     CommandArgumentData thread_id_arg;
@@ -526,12 +525,12 @@ protected:
       return false;
     }
 
-    // If we got a new plan, then set it to be a master plan (User level Plans
-    // should be master plans so that they can be interruptible).  Then resume
-    // the process.
+    // If we got a new plan, then set it to be a controlling plan (User level
+    // Plans should be controlling plans so that they can be interruptible).
+    // Then resume the process.
 
     if (new_plan_sp) {
-      new_plan_sp->SetIsMasterPlan(true);
+      new_plan_sp->SetIsControllingPlan(true);
       new_plan_sp->SetOkayToDiscard(false);
 
       if (m_options.m_step_count > 1) {
@@ -780,7 +779,7 @@ public:
     uint32_t m_thread_idx = LLDB_INVALID_THREAD_ID;
     uint32_t m_frame_idx = LLDB_INVALID_FRAME_ID;
 
-    CommandOptions() : Options() {
+    CommandOptions() {
       // Keep default values of all options in one place: OptionParsingStarting
       // ()
       OptionParsingStarting(nullptr);
@@ -861,8 +860,7 @@ public:
             " is provided, stepping will stop when the first one is hit.",
             nullptr,
             eCommandRequiresThread | eCommandTryTargetAPILock |
-                eCommandProcessMustBeLaunched | eCommandProcessMustBePaused),
-        m_options() {
+                eCommandProcessMustBeLaunched | eCommandProcessMustBePaused) {
     CommandArgumentEntry arg;
     CommandArgumentData line_num_arg;
 
@@ -1021,11 +1019,12 @@ protected:
             abort_other_plans, &address_list.front(), address_list.size(),
             m_options.m_stop_others, m_options.m_frame_idx, new_plan_status);
         if (new_plan_sp) {
-          // User level plans should be master plans so they can be interrupted
+          // User level plans should be controlling plans so they can be
+          // interrupted
           // (e.g. by hitting a breakpoint) and other plans executed by the
           // user (stepping around the breakpoint) and then a "continue" will
           // resume the original plan.
-          new_plan_sp->SetIsMasterPlan(true);
+          new_plan_sp->SetIsControllingPlan(true);
           new_plan_sp->SetOkayToDiscard(false);
         } else {
           result.SetError(new_plan_status);
@@ -1185,7 +1184,7 @@ class CommandObjectThreadInfo : public CommandObjectIterateOverThreads {
 public:
   class CommandOptions : public Options {
   public:
-    CommandOptions() : Options() { OptionParsingStarting(nullptr); }
+    CommandOptions() { OptionParsingStarting(nullptr); }
 
     ~CommandOptions() override = default;
 
@@ -1230,8 +1229,7 @@ public:
             "current thread.",
             "thread info",
             eCommandRequiresProcess | eCommandTryTargetAPILock |
-                eCommandProcessMustBeLaunched | eCommandProcessMustBePaused),
-        m_options() {
+                eCommandProcessMustBeLaunched | eCommandProcessMustBePaused) {
     m_add_return = false;
   }
 
@@ -1322,6 +1320,53 @@ public:
   }
 };
 
+class CommandObjectThreadSiginfo : public CommandObjectIterateOverThreads {
+public:
+  CommandObjectThreadSiginfo(CommandInterpreter &interpreter)
+      : CommandObjectIterateOverThreads(
+            interpreter, "thread siginfo",
+            "Display the current siginfo object for a thread. Defaults to "
+            "the current thread.",
+            "thread siginfo",
+            eCommandRequiresProcess | eCommandTryTargetAPILock |
+                eCommandProcessMustBeLaunched | eCommandProcessMustBePaused) {}
+
+  ~CommandObjectThreadSiginfo() override = default;
+
+  void
+  HandleArgumentCompletion(CompletionRequest &request,
+                           OptionElementVector &opt_element_vector) override {
+    CommandCompletions::InvokeCommonCompletionCallbacks(
+        GetCommandInterpreter(), CommandCompletions::eThreadIndexCompletion,
+        request, nullptr);
+  }
+
+  bool HandleOneThread(lldb::tid_t tid, CommandReturnObject &result) override {
+    ThreadSP thread_sp =
+        m_exe_ctx.GetProcessPtr()->GetThreadList().FindThreadByID(tid);
+    if (!thread_sp) {
+      result.AppendErrorWithFormat("thread no longer exists: 0x%" PRIx64 "\n",
+                                   tid);
+      return false;
+    }
+
+    Stream &strm = result.GetOutputStream();
+    if (!thread_sp->GetDescription(strm, eDescriptionLevelFull, false, false)) {
+      result.AppendErrorWithFormat("error displaying info for thread: \"%d\"\n",
+                                   thread_sp->GetIndexID());
+      return false;
+    }
+    ValueObjectSP exception_object_sp = thread_sp->GetSiginfoValue();
+    if (exception_object_sp)
+      exception_object_sp->Dump(strm);
+    else
+      strm.Printf("(no siginfo)\n");
+    strm.PutChar('\n');
+
+    return true;
+  }
+};
+
 // CommandObjectThreadReturn
 #define LLDB_OPTIONS_thread_return
 #include "CommandOptions.inc"
@@ -1330,7 +1375,7 @@ class CommandObjectThreadReturn : public CommandObjectRaw {
 public:
   class CommandOptions : public Options {
   public:
-    CommandOptions() : Options() {
+    CommandOptions() {
       // Keep default values of all options in one place: OptionParsingStarting
       // ()
       OptionParsingStarting(nullptr);
@@ -1385,8 +1430,7 @@ public:
                          "thread return",
                          eCommandRequiresFrame | eCommandTryTargetAPILock |
                              eCommandProcessMustBeLaunched |
-                             eCommandProcessMustBePaused),
-        m_options() {
+                             eCommandProcessMustBePaused) {
     CommandArgumentEntry arg;
     CommandArgumentData expression_arg;
 
@@ -1495,7 +1539,7 @@ class CommandObjectThreadJump : public CommandObjectParsed {
 public:
   class CommandOptions : public Options {
   public:
-    CommandOptions() : Options() { OptionParsingStarting(nullptr); }
+    CommandOptions() { OptionParsingStarting(nullptr); }
 
     ~CommandOptions() override = default;
 
@@ -1555,8 +1599,7 @@ public:
             interpreter, "thread jump",
             "Sets the program counter to a new address.", "thread jump",
             eCommandRequiresFrame | eCommandTryTargetAPILock |
-                eCommandProcessMustBeLaunched | eCommandProcessMustBePaused),
-        m_options() {}
+                eCommandProcessMustBeLaunched | eCommandProcessMustBePaused) {}
 
   ~CommandObjectThreadJump() override = default;
 
@@ -1632,7 +1675,7 @@ class CommandObjectThreadPlanList : public CommandObjectIterateOverThreads {
 public:
   class CommandOptions : public Options {
   public:
-    CommandOptions() : Options() {
+    CommandOptions() {
       // Keep default values of all options in one place: OptionParsingStarting
       // ()
       OptionParsingStarting(nullptr);
@@ -1694,8 +1737,7 @@ public:
             nullptr,
             eCommandRequiresProcess | eCommandRequiresThread |
                 eCommandTryTargetAPILock | eCommandProcessMustBeLaunched |
-                eCommandProcessMustBePaused),
-        m_options() {}
+                eCommandProcessMustBePaused) {}
 
   ~CommandObjectThreadPlanList() override = default;
 
@@ -1929,15 +1971,14 @@ public:
             "process to different formats.",
             "thread trace export <export-plugin> [<subcommand objects>]") {
 
-    for (uint32_t i = 0; true; i++) {
-      if (const char *plugin_name =
-              PluginManager::GetTraceExporterPluginNameAtIndex(i)) {
-        if (ThreadTraceExportCommandCreator command_creator =
-                PluginManager::GetThreadTraceExportCommandCreatorAtIndex(i)) {
-          LoadSubCommand(plugin_name, command_creator(interpreter));
-        }
-      } else {
-        break;
+    unsigned i = 0;
+    for (llvm::StringRef plugin_name =
+             PluginManager::GetTraceExporterPluginNameAtIndex(i++);
+         !plugin_name.empty();
+         plugin_name = PluginManager::GetTraceExporterPluginNameAtIndex(i++)) {
+      if (ThreadTraceExportCommandCreator command_creator =
+              PluginManager::GetThreadTraceExportCommandCreatorAtIndex(i)) {
+        LoadSubCommand(plugin_name, command_creator(interpreter));
       }
     }
   }
@@ -2004,7 +2045,7 @@ class CommandObjectTraceDumpInstructions
 public:
   class CommandOptions : public Options {
   public:
-    CommandOptions() : Options() { OptionParsingStarting(nullptr); }
+    CommandOptions() { OptionParsingStarting(nullptr); }
 
     ~CommandOptions() override = default;
 
@@ -2085,7 +2126,7 @@ public:
             eCommandRequiresProcess | eCommandTryTargetAPILock |
                 eCommandProcessMustBeLaunched | eCommandProcessMustBePaused |
                 eCommandProcessMustBeTraced),
-        m_options(), m_create_repeat_command_just_invoked(false) {}
+        m_create_repeat_command_just_invoked(false) {}
 
   ~CommandObjectTraceDumpInstructions() override = default;
 
@@ -2165,7 +2206,7 @@ class CommandObjectTraceDumpInfo : public CommandObjectIterateOverThreads {
 public:
   class CommandOptions : public Options {
   public:
-    CommandOptions() : Options() { OptionParsingStarting(nullptr); }
+    CommandOptions() { OptionParsingStarting(nullptr); }
 
     ~CommandOptions() override = default;
 
@@ -2213,8 +2254,7 @@ public:
             nullptr,
             eCommandRequiresProcess | eCommandTryTargetAPILock |
                 eCommandProcessMustBeLaunched | eCommandProcessMustBePaused |
-                eCommandProcessMustBeTraced),
-        m_options() {}
+                eCommandProcessMustBeTraced) {}
 
   ~CommandObjectTraceDumpInfo() override = default;
 
@@ -2300,6 +2340,8 @@ CommandObjectMultiwordThread::CommandObjectMultiwordThread(
                  CommandObjectSP(new CommandObjectThreadInfo(interpreter)));
   LoadSubCommand("exception", CommandObjectSP(new CommandObjectThreadException(
                                   interpreter)));
+  LoadSubCommand("siginfo",
+                 CommandObjectSP(new CommandObjectThreadSiginfo(interpreter)));
   LoadSubCommand("step-in",
                  CommandObjectSP(new CommandObjectThreadStepWithTypeAndScope(
                      interpreter, "thread step-in",

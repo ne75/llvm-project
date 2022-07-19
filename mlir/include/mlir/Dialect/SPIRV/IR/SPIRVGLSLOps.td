@@ -21,12 +21,20 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 //===----------------------------------------------------------------------===//
 
 // Base class for all GLSL ops.
-class SPV_GLSLOp<string mnemonic, int opcode, list<OpTrait> traits = []> :
-  SPV_ExtInstOp<mnemonic, "GLSL", "GLSL.std.450", opcode, traits>;
+class SPV_GLSLOp<string mnemonic, int opcode, list<Trait> traits = []> :
+  SPV_ExtInstOp<mnemonic, "GLSL", "GLSL.std.450", opcode, traits> {
+
+  let availability = [
+    MinVersion<SPV_V_1_0>,
+    MaxVersion<SPV_V_1_5>,
+    Extension<[]>,
+    Capability<[SPV_C_Shader]>
+  ];
+}
 
 // Base class for GLSL unary ops.
 class SPV_GLSLUnaryOp<string mnemonic, int opcode, Type resultType,
-                      Type operandType, list<OpTrait> traits = []> :
+                      Type operandType, list<Trait> traits = []> :
   SPV_GLSLOp<mnemonic, opcode, !listconcat([NoSideEffect], traits)> {
 
   let arguments = (ins
@@ -47,12 +55,12 @@ class SPV_GLSLUnaryOp<string mnemonic, int opcode, Type resultType,
 // Base class for GLSL Unary arithmetic ops where return type matches
 // the operand type.
 class SPV_GLSLUnaryArithmeticOp<string mnemonic, int opcode, Type type,
-                                list<OpTrait> traits = []> :
+                                list<Trait> traits = []> :
   SPV_GLSLUnaryOp<mnemonic, opcode, type, type, traits>;
 
 // Base class for GLSL binary ops.
 class SPV_GLSLBinaryOp<string mnemonic, int opcode, Type resultType,
-                        Type operandType, list<OpTrait> traits = []> :
+                        Type operandType, list<Trait> traits = []> :
   SPV_GLSLOp<mnemonic, opcode, !listconcat([NoSideEffect], traits)> {
 
   let arguments = (ins
@@ -74,12 +82,12 @@ class SPV_GLSLBinaryOp<string mnemonic, int opcode, Type resultType,
 // Base class for GLSL Binary arithmetic ops where operand types and
 // return type matches.
 class SPV_GLSLBinaryArithmeticOp<string mnemonic, int opcode, Type type,
-                                 list<OpTrait> traits = []> :
+                                 list<Trait> traits = []> :
   SPV_GLSLBinaryOp<mnemonic, opcode, type, type, traits>;
 
 // Base class for GLSL ternary ops.
 class SPV_GLSLTernaryArithmeticOp<string mnemonic, int opcode, Type type,
-                        list<OpTrait> traits = []> :
+                        list<Trait> traits = []> :
   SPV_GLSLOp<mnemonic, opcode, !listconcat([NoSideEffect], traits)> {
 
   let arguments = (ins

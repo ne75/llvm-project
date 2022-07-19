@@ -102,6 +102,7 @@ private:
   bool foldExtractedCmps(Instruction &I);
   bool foldSingleElementStore(Instruction &I);
   bool scalarizeLoadExtract(Instruction &I);
+  bool foldShuffleOfBinops(Instruction &I);
 
   void replaceValue(Value &Old, Value &New) {
     Old.replaceAllUsesWith(&New);
@@ -151,12 +152,7 @@ bool VectorCombine::vectorizeLoadInsert(Instruction &I) {
   Value *SrcPtr = Load->getPointerOperand()->stripPointerCasts();
   assert(isa<PointerType>(SrcPtr->getType()) && "Expected a pointer type");
 
-  // If original AS != Load's AS, we can't bitcast the original pointer and have
-  // to use Load's operand instead. Ideally we would want to strip pointer casts
-  // without changing AS, but there's no API to do that ATM.
   unsigned AS = Load->getPointerAddressSpace();
-  if (AS != SrcPtr->getType()->getPointerAddressSpace())
-    SrcPtr = Load->getPointerOperand();
 
   // We are potentially transforming byte-sized (8-bit) memory accesses, so make
   // sure we have all of our type-based constraints in place for this target.
@@ -244,7 +240,8 @@ bool VectorCombine::vectorizeLoadInsert(Instruction &I) {
   // It is safe and potentially profitable to load a vector directly:
   // inselt undef, load Scalar, 0 --> load VecPtr
   IRBuilder<> Builder(Load);
-  Value *CastedPtr = Builder.CreateBitCast(SrcPtr, MinVecTy->getPointerTo(AS));
+  Value *CastedPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(
+      SrcPtr, MinVecTy->getPointerTo(AS));
   Value *VecLd = Builder.CreateAlignedLoad(MinVecTy, CastedPtr, Alignment);
   VecLd = Builder.CreateShuffleVector(VecLd, Mask);
 
@@ -880,7 +877,8 @@ static ScalarizationResult canScalarizeAccess(FixedVectorType *VecTy,
   ConstantRange IdxRange(IntWidth, true);
 
   if (isGuaranteedNotToBePoison(Idx, &AC)) {
-    if (ValidIndices.contains(computeConstantRange(Idx, true, &AC, CtxI, &DT)))
+    if (ValidIndices.contains(computeConstantRange(Idx, /* ForSigned */ false,
+                                                   true, &AC, CtxI, &DT)))
       return ScalarizationResult::safe();
     return ScalarizationResult::unsafe();
   }
@@ -988,9 +986,9 @@ bool VectorCombine::scalarizeLoadExtract(Instruction &I) {
   if (!FixedVT)
     return false;
 
-  InstructionCost OriginalCost = TTI.getMemoryOpCost(
-      Instruction::Load, LI->getType(), Align(LI->getAlignment()),
-      LI->getPointerAddressSpace());
+  InstructionCost OriginalCost =
+      TTI.getMemoryOpCost(Instruction::Load, LI->getType(), LI->getAlign(),
+                          LI->getPointerAddressSpace());
   InstructionCost ScalarizedCost = 0;
 
   Instruction *LastCheckedInst = LI;
@@ -1065,6 +1063,60 @@ bool VectorCombine::scalarizeLoadExtract(Instruction &I) {
   return true;
 }
 
+/// Try to convert "shuffle (binop), (binop)" with a shared binop operand into
+/// "binop (shuffle), (shuffle)".
+bool VectorCombine::foldShuffleOfBinops(Instruction &I) {
+  auto *VecTy = dyn_cast<FixedVectorType>(I.getType());
+  if (!VecTy)
+    return false;
+
+  BinaryOperator *B0, *B1;
+  ArrayRef<int> Mask;
+  if (!match(&I, m_Shuffle(m_OneUse(m_BinOp(B0)), m_OneUse(m_BinOp(B1)),
+                           m_Mask(Mask))) ||
+      B0->getOpcode() != B1->getOpcode() || B0->getType() != VecTy)
+    return false;
+
+  // Try to replace a binop with a shuffle if the shuffle is not costly.
+  // The new shuffle will choose from a single, common operand, so it may be
+  // cheaper than the existing two-operand shuffle.
+  SmallVector<int> UnaryMask = createUnaryMask(Mask, Mask.size());
+  Instruction::BinaryOps Opcode = B0->getOpcode();
+  InstructionCost BinopCost = TTI.getArithmeticInstrCost(Opcode, VecTy);
+  InstructionCost ShufCost = TTI.getShuffleCost(
+      TargetTransformInfo::SK_PermuteSingleSrc, VecTy, UnaryMask);
+  if (ShufCost > BinopCost)
+    return false;
+
+  // If we have something like "add X, Y" and "add Z, X", swap ops to match.
+  Value *X = B0->getOperand(0), *Y = B0->getOperand(1);
+  Value *Z = B1->getOperand(0), *W = B1->getOperand(1);
+  if (BinaryOperator::isCommutative(Opcode) && X != Z && Y != W)
+    std::swap(X, Y);
+
+  Value *Shuf0, *Shuf1;
+  if (X == Z) {
+    // shuf (bo X, Y), (bo X, W) --> bo (shuf X), (shuf Y, W)
+    Shuf0 = Builder.CreateShuffleVector(X, UnaryMask);
+    Shuf1 = Builder.CreateShuffleVector(Y, W, Mask);
+  } else if (Y == W) {
+    // shuf (bo X, Y), (bo Z, Y) --> bo (shuf X, Z), (shuf Y)
+    Shuf0 = Builder.CreateShuffleVector(X, Z, Mask);
+    Shuf1 = Builder.CreateShuffleVector(Y, UnaryMask);
+  } else {
+    return false;
+  }
+
+  Value *NewBO = Builder.CreateBinOp(Opcode, Shuf0, Shuf1);
+  // Intersect flags from the old binops.
+  if (auto *NewInst = dyn_cast<Instruction>(NewBO)) {
+    NewInst->copyIRFlags(B0);
+    NewInst->andIRFlags(B1);
+  }
+  replaceValue(I, *NewBO);
+  return true;
+}
+
 /// This is the entry point for all transforms. Pass manager differences are
 /// handled in the callers of this function.
 bool VectorCombine::run() {
@@ -1083,6 +1135,7 @@ bool VectorCombine::run() {
       MadeChange |= foldExtractExtract(I);
       MadeChange |= foldBitcastShuf(I);
       MadeChange |= foldExtractedCmps(I);
+      MadeChange |= foldShuffleOfBinops(I);
     }
     MadeChange |= scalarizeBinopOrCmp(I);
     MadeChange |= scalarizeLoadExtract(I);

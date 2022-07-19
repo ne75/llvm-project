@@ -25,7 +25,7 @@ using namespace clang;
 static const LangASMap DefaultAddrSpaceMap = {0};
 
 // TargetInfo Constructor.
-TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
+TargetInfo::TargetInfo(const llvm::Triple &T) : Triple(T) {
   // Set defaults.  Defaults are set for a 32-bit RISC platform, like PPC or
   // SPARC.  These should be overridden by concrete targets as needed.
   BigEndian = !T.isLittleEndian();
@@ -37,6 +37,8 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   HasIbm128 = false;
   HasFloat16 = false;
   HasBFloat16 = false;
+  HasLongDouble = true;
+  HasFPReturn = true;
   HasStrictFP = false;
   PointerWidth = PointerAlign = 32;
   BoolWidth = BoolAlign = 8;
@@ -67,11 +69,11 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   // From the glibc documentation, on GNU systems, malloc guarantees 16-byte
   // alignment on 64-bit systems and 8-byte alignment on 32-bit systems. See
   // https://www.gnu.org/software/libc/manual/html_node/Malloc-Examples.html.
-  // This alignment guarantee also applies to Windows and Android. On Darwin,
-  // the alignment is 16 bytes on both 64-bit and 32-bit systems.
+  // This alignment guarantee also applies to Windows and Android. On Darwin
+  // and OpenBSD, the alignment is 16 bytes on both 64-bit and 32-bit systems.
   if (T.isGNUEnvironment() || T.isWindowsMSVCEnvironment() || T.isAndroid())
     NewAlign = Triple.isArch64Bit() ? 128 : Triple.isArch32Bit() ? 64 : 0;
-  else if (T.isOSDarwin())
+  else if (T.isOSDarwin() || T.isOSOpenBSD())
     NewAlign = 128;
   else
     NewAlign = 0; // Infer from basic type alignment.
@@ -148,6 +150,7 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   PlatformMinVersion = VersionTuple();
 
   MaxOpenCLWorkGroupSize = 1024;
+  ProgramAddrSpace = 0;
 }
 
 // Out of line virtual dtor for TargetInfo.
@@ -300,8 +303,11 @@ FloatModeKind TargetInfo::getRealTypeByWidth(unsigned BitWidth,
     if (ExplicitType == FloatModeKind::Ibm128)
       return hasIbm128Type() ? FloatModeKind::Ibm128
                              : FloatModeKind::NoFloat;
-    if (ExplicitType == FloatModeKind::LongDouble)
-      return ExplicitType;
+    if (&getLongDoubleFormat() == &llvm::APFloat::PPCDoubleDouble() ||
+        &getLongDoubleFormat() == &llvm::APFloat::IEEEquad())
+      return FloatModeKind::LongDouble;
+    if (hasFloat128Type())
+      return FloatModeKind::Float128;
     break;
   }
 
@@ -416,6 +422,8 @@ void TargetInfo::adjust(DiagnosticsEngine &Diags, LangOptions &Opts) {
           OpenCLFeaturesMap, "__opencl_c_generic_address_space");
       Opts.OpenCLPipes =
           hasFeatureEnabled(OpenCLFeaturesMap, "__opencl_c_pipes");
+      Opts.Blocks =
+          hasFeatureEnabled(OpenCLFeaturesMap, "__opencl_c_device_enqueue");
     }
   }
 

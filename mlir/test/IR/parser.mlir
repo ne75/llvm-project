@@ -12,9 +12,6 @@
 // CHECK-DAG: #map{{[0-9]+}} = affine_map<(d0, d1, d2) -> (d1, d0, d2)>
 #map3 = affine_map<(d0, d1, d2) -> (d1, d0, d2)>
 
-// CHECK-DAG: #map{{[0-9]+}} = affine_map<(d0, d1, d2) -> (d2, d1, d0)>
-#map4 = affine_map<(d0, d1, d2) -> (d2, d1, d0)>
-
 // CHECK-DAG: #map{{[0-9]+}} = affine_map<()[s0] -> (0, s0 - 1)>
 #inline_map_minmax_loop1 = affine_map<()[s0] -> (0, s0 - 1)>
 
@@ -70,8 +67,8 @@ func private @uint_types(ui2, ui4) -> (ui7, ui1023)
 // CHECK: func private @float_types(f80, f128)
 func private @float_types(f80, f128)
 
-// CHECK: func private @vectors(vector<1xf32>, vector<2x4xf32>)
-func private @vectors(vector<1 x f32>, vector<2x4xf32>)
+// CHECK: func private @vectors(vector<f32>, vector<1xf32>, vector<2x4xf32>)
+func private @vectors(vector<f32>, vector<1 x f32>, vector<2x4xf32>)
 
 // CHECK: func private @tensors(tensor<*xf32>, tensor<*xvector<2x4xf32>>, tensor<1x?x4x?x?xi32>, tensor<i8>)
 func private @tensors(tensor<* x f32>, tensor<* x vector<2x4xf32>>,
@@ -80,27 +77,17 @@ func private @tensors(tensor<* x f32>, tensor<* x vector<2x4xf32>>,
 // CHECK: func private @tensor_encoding(tensor<16x32xf64, "sparse">)
 func private @tensor_encoding(tensor<16x32xf64, "sparse">)
 
-// CHECK: func private @memrefs(memref<1x?x4x?x?xi32, #map{{[0-9]+}}>, memref<8xi8>)
-func private @memrefs(memref<1x?x4x?x?xi32, #map0>, memref<8xi8, #map1, #map1>)
+// CHECK: func private @large_shape_dimension(tensor<9223372036854775807xf32>)
+func private @large_shape_dimension(tensor<9223372036854775807xf32>)
 
-// Test memref affine map compositions.
+// CHECK: func private @functions((memref<1x?x4x?x?xi32, #map0>, memref<8xi8>) -> (), () -> ())
+func private @functions((memref<1x?x4x?x?xi32, #map0, 0>, memref<8xi8, #map1, 0>) -> (), ()->())
 
 // CHECK: func private @memrefs2(memref<2x4x8xi8, 1>)
 func private @memrefs2(memref<2x4x8xi8, #map2, 1>)
 
-// CHECK: func private @memrefs23(memref<2x4x8xi8, #map{{[0-9]+}}>)
-func private @memrefs23(memref<2x4x8xi8, #map2, #map3, 0>)
-
-// CHECK: func private @memrefs234(memref<2x4x8xi8, #map{{[0-9]+}}, #map{{[0-9]+}}, 3>)
-func private @memrefs234(memref<2x4x8xi8, #map2, #map3, #map4, 3>)
-
-// Test memref inline affine map compositions, minding that identity maps are removed.
-
 // CHECK: func private @memrefs3(memref<2x4x8xi8>)
 func private @memrefs3(memref<2x4x8xi8, affine_map<(d0, d1, d2) -> (d0, d1, d2)>>)
-
-// CHECK: func private @memrefs33(memref<2x4x8xi8, #map{{[0-9]+}}, 1>)
-func private @memrefs33(memref<2x4x8xi8, affine_map<(d0, d1, d2) -> (d0, d1, d2)>, affine_map<(d0, d1, d2) -> (d1, d0, d2)>, 1>)
 
 // CHECK: func private @memrefs_drop_triv_id_inline(memref<2xi8>)
 func private @memrefs_drop_triv_id_inline(memref<2xi8, affine_map<(d0) -> (d0)>>)
@@ -110,35 +97,6 @@ func private @memrefs_drop_triv_id_inline0(memref<2xi8, affine_map<(d0) -> (d0)>
 
 // CHECK: func private @memrefs_drop_triv_id_inline1(memref<2xi8, 1>)
 func private @memrefs_drop_triv_id_inline1(memref<2xi8, affine_map<(d0) -> (d0)>, 1>)
-
-// Identity maps should be dropped from the composition, but not the pair of
-// "interchange" maps that, if composed, would be also an identity.
-// CHECK: func private @memrefs_drop_triv_id_composition(memref<2x2xi8, #map{{[0-9]+}}, #map{{[0-9]+}}>)
-func private @memrefs_drop_triv_id_composition(memref<2x2xi8,
-                                                affine_map<(d0, d1) -> (d1, d0)>,
-                                                affine_map<(d0, d1) -> (d0, d1)>,
-                                                affine_map<(d0, d1) -> (d1, d0)>,
-                                                affine_map<(d0, d1) -> (d0, d1)>,
-                                                affine_map<(d0, d1) -> (d0, d1)>>)
-
-// CHECK: func private @memrefs_drop_triv_id_trailing(memref<2x2xi8, #map{{[0-9]+}}>)
-func private @memrefs_drop_triv_id_trailing(memref<2x2xi8, affine_map<(d0, d1) -> (d1, d0)>,
-                                                   affine_map<(d0, d1) -> (d0, d1)>>)
-
-// CHECK: func private @memrefs_drop_triv_id_middle(memref<2x2xi8, #map{{[0-9]+}}, #map{{[0-9]+}}>)
-func private @memrefs_drop_triv_id_middle(memref<2x2xi8,
-                                         affine_map<(d0, d1) -> (d0, d1 + 1)>,
-                                         affine_map<(d0, d1) -> (d0, d1)>,
-                                         affine_map<(d0, d1) -> (d0 + 1, d1)>>)
-
-// CHECK: func private @memrefs_drop_triv_id_multiple(memref<2xi8>)
-func private @memrefs_drop_triv_id_multiple(memref<2xi8, affine_map<(d0) -> (d0)>, affine_map<(d0) -> (d0)>>)
-
-// These maps appeared before, so they must be uniqued and hoisted to the beginning.
-// Identity map should be removed.
-// CHECK: func private @memrefs_compose_with_id(memref<2x2xi8, #map{{[0-9]+}}>)
-func private @memrefs_compose_with_id(memref<2x2xi8, affine_map<(d0, d1) -> (d0, d1)>,
-                                             affine_map<(d0, d1) -> (d1, d0)>>)
 
 // Test memref with custom memory space
 
@@ -201,9 +159,6 @@ func private @unranked_memref_with_index_elems(memref<*xindex>)
 
 // CHECK: func private @unranked_memref_with_vector_elems(memref<*xvector<10xf32>>)
 func private @unranked_memref_with_vector_elems(memref<*xvector<10xf32>>)
-
-// CHECK: func private @functions((memref<1x?x4x?x?xi32, #map0>, memref<8xi8>) -> (), () -> ())
-func private @functions((memref<1x?x4x?x?xi32, #map0, 0>, memref<8xi8, #map1, 0>) -> (), ()->())
 
 // CHECK-LABEL: func @simpleCFG(%{{.*}}: i32, %{{.*}}: f32) -> i1 {
 func @simpleCFG(%arg0: i32, %f: f32) -> i1 {
@@ -909,7 +864,7 @@ func @verbose_if(%N: index) {
 // CHECK-LABEL: func @terminator_with_regions
 func @terminator_with_regions() {
   // Combine successors and regions in the same operation.
-  // CHECK: "region"()[^bb1] ( {
+  // CHECK: "region"()[^bb1] ({
   // CHECK: }) : () -> ()
   "region"()[^bb2] ({}) : () -> ()
 ^bb2:
@@ -1177,7 +1132,7 @@ func @special_float_values_in_tensors() {
 
 // CHECK-LABEL: func @op_with_region_args
 func @op_with_region_args() {
-  // CHECK: "test.polyfor"() ( {
+  // CHECK: "test.polyfor"() ({
   // CHECK-NEXT: ^bb{{.*}}(%{{.*}}: index, %{{.*}}: index, %{{.*}}: index):
   test.polyfor %i, %j, %k {
     "foo"() : () -> ()
@@ -1254,18 +1209,15 @@ func private @string_attr_name() attributes {"0 . 0", nested = {"0 . 0"}}
 func private @nested_reference() attributes {test.ref = @some_symbol::@some_nested_symbol }
 
 // CHECK-LABEL: func @custom_asm_names
-func @custom_asm_names() -> (i32, i32, i32, i32, i32, i32, i32) {
+func @custom_asm_names() -> (i32, i32, i32, i32, i32, i32) {
   // CHECK: %[[FIRST:first.*]], %[[MIDDLE:middle_results.*]]:2, %[[LAST:[0-9]+]]
   %0, %1:2, %2 = "test.asm_interface_op"() : () -> (i32, i32, i32, i32)
 
   // CHECK: %[[FIRST_2:first.*]], %[[LAST_2:[0-9]+]]
   %3, %4 = "test.asm_interface_op"() : () -> (i32, i32)
 
-  // CHECK: %[[RESULT:result.*]]
-  %5 = "test.asm_dialect_interface_op"() : () -> (i32)
-
   // CHECK: return %[[FIRST]], %[[MIDDLE]]#0, %[[MIDDLE]]#1, %[[LAST]], %[[FIRST_2]], %[[LAST_2]]
-  return %0, %1#0, %1#1, %2, %3, %4, %5 : i32, i32, i32, i32, i32, i32, i32
+  return %0, %1#0, %1#1, %2, %3, %4 : i32, i32, i32, i32, i32, i32
 }
 
 
@@ -1444,7 +1396,7 @@ test.graph_region {
 // CHECK: test.graph_region {
 test.graph_region {
 // CHECK:   [[VAL1:%.*]] = "op1"([[VAL3:%.*]]) : (i32) -> i32
-// CHECK:   [[VAL2:%.*]] = "test.ssacfg_region"([[VAL1]], [[VAL2]], [[VAL3]], [[VAL4:%.*]]) ( {
+// CHECK:   [[VAL2:%.*]] = "test.ssacfg_region"([[VAL1]], [[VAL2]], [[VAL3]], [[VAL4:%.*]]) ({
 // CHECK:     [[VAL5:%.*]] = "op2"([[VAL1]], [[VAL2]], [[VAL3]], [[VAL4]]) : (i32, i32, i32, i32) -> i32
 // CHECK:   }) : (i32, i32, i32, i32) -> i32
 // CHECK:   [[VAL3]] = "op2"([[VAL1]], [[VAL4]]) : (i32, i32) -> i32
@@ -1458,10 +1410,10 @@ test.graph_region {
   %4 = "op3"(%1) : (i32) -> (i32)
 }
 
-// CHECK: "unregistered_func_might_have_graph_region"() ( {
+// CHECK: "unregistered_func_might_have_graph_region"() ({
 // CHECK: [[VAL1:%.*]] = "foo"([[VAL1]], [[VAL2:%.*]]) : (i64, i64) -> i64
 // CHECK: [[VAL2]] = "bar"([[VAL1]])
-"unregistered_func_might_have_graph_region"() ( {
+"unregistered_func_might_have_graph_region"() ({
   %1 = "foo"(%1, %2) : (i64, i64) -> i64
   %2 = "bar"(%1) : (i64) -> i64
   "unregistered_terminator"() : () -> ()
@@ -1470,3 +1422,8 @@ test.graph_region {
 // This is an unregister operation, the printing/parsing is handled by the dialect.
 // CHECK: test.dialect_custom_printer custom_format
 test.dialect_custom_printer custom_format
+
+// This is a registered operation with no custom parser and printer, and should
+// be handled by the dialect.
+// CHECK: test.dialect_custom_format_fallback custom_format_fallback
+test.dialect_custom_format_fallback custom_format_fallback

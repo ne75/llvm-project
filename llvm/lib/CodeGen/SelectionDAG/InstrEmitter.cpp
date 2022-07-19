@@ -765,7 +765,7 @@ InstrEmitter::EmitDbgInstrRef(SDDbgValue *SD,
   assert(!SD->isVariadic());
   SDDbgOperand DbgOperand = SD->getLocationOps()[0];
   MDNode *Var = SD->getVariable();
-  MDNode *Expr = SD->getExpression();
+  DIExpression *Expr = (DIExpression*)SD->getExpression();
   DebugLoc DL = SD->getDebugLoc();
   const MCInstrDesc &RefII = TII->get(TargetOpcode::DBG_INSTR_REF);
 
@@ -774,6 +774,13 @@ InstrEmitter::EmitDbgInstrRef(SDDbgValue *SD,
   if (DbgOperand.getKind() == SDDbgOperand::FRAMEIX ||
       DbgOperand.getKind() == SDDbgOperand::CONST)
     return EmitDbgValueFromSingleOp(SD, VRBaseMap);
+
+  // Immediately fold any indirectness from the LLVM-IR intrinsic into the
+  // expression:
+  if (SD->isIndirect()) {
+    std::vector<uint64_t> Elts = {dwarf::DW_OP_deref};
+    Expr = DIExpression::append(Expr, Elts);
+  }
 
   // It may not be immediately possible to identify the MachineInstr that
   // defines a VReg, it can depend for example on the order blocks are
@@ -1334,11 +1341,12 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
 /// InstrEmitter - Construct an InstrEmitter and set it to start inserting
 /// at the given position in the given block.
 InstrEmitter::InstrEmitter(const TargetMachine &TM, MachineBasicBlock *mbb,
-                           MachineBasicBlock::iterator insertpos)
+                           MachineBasicBlock::iterator insertpos,
+                           bool UseInstrRefDebugInfo)
     : MF(mbb->getParent()), MRI(&MF->getRegInfo()),
       TII(MF->getSubtarget().getInstrInfo()),
       TRI(MF->getSubtarget().getRegisterInfo()),
       TLI(MF->getSubtarget().getTargetLowering()), MBB(mbb),
       InsertPos(insertpos) {
-  EmitDebugInstrRefs = MF->useDebugInstrRef();
+  EmitDebugInstrRefs = UseInstrRefDebugInfo;
 }
