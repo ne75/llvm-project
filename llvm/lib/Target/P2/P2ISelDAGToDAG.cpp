@@ -46,7 +46,7 @@ void P2DAGToDAGISel::selectMultiplication(SDNode *N) {
     SDLoc DL(N);
     MVT vt = N->getSimpleValueType(0);
 
-    assert(vt == MVT::i32 && "unexpected value type");
+    assert((vt == MVT::i8 || vt == MVT::i16 || vt == MVT::i32) && "unexpected value type");
     unsigned op = P2::QMULrr;
 
     SDValue cond = CurDAG->getTargetConstant(P2::ALWAYS, DL, vt);

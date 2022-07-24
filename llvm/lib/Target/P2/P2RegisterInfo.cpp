@@ -68,11 +68,6 @@ BitVector P2RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
     Reserved.set(P2::QX);
     Reserved.set(P2::QY);
 
-    Reserved.set(P2::R30); // reserve R30 since it's used for returns
-    Reserved.set(P2::R31); // reserve R31 since it's used for returns
-
-    Reserved.set(P2::R30_R31); // reserve the long long return "register"
-
     // reserve all "cogram" regsisters
     for (int i = P2::C0; i <= P2::C463; i++) {
         Reserved.set(i);
@@ -128,14 +123,18 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
         MI.addOperand(MachineOperand::CreateImm(P2::ALWAYS));
         MI.addOperand(MachineOperand::CreateImm(P2::NOEFF));
 
+        // remove the dead mark if it's there since it is now used in the next instruction
+        MI.getOperand(0).setIsDead(false);
+
         Register dst_reg = MI.getOperand(0).getReg();
         II++; // skip forward by 1 instruction
 
         BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::SUBri), dst_reg)
-                                .addReg(dst_reg, RegState::Kill)
-                                .addImm(offset)
-                                .addImm(P2::ALWAYS)
-                                .addImm(P2::NOEFF);
+            .addReg(dst_reg, RegState::Kill)
+            .addImm(offset)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+            
     } else if ((op == P2::WRLONGri) || (op == P2::RDLONGri) || (op == P2::WRLONGii)) {
         int imm = 0;
         offset *= -1;
