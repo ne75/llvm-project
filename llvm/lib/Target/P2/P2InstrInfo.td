@@ -221,7 +221,6 @@ def : Pat<(sext_inreg P2GPRPair:$d, i8), (SEXTIR64 P2GPRPair:$d, 7)>;
 def : Pat<(sext_inreg P2GPRPair:$d, i16), (SEXTIR64 P2GPRPair:$d, 15)>;
 def : Pat<(sext_inreg P2GPRPair:$d, i32), (SEXTIR64 P2GPRPair:$d, 31)>;
 
-//subregisters, a register providing an insert value, and a subregister index
 /*--------------------------------*/
 /* More complicated math          */
 /*--------------------------------*/
@@ -234,6 +233,8 @@ let DecoderMethod = "DecodeGetQInstruction" in {
 let DecoderMethod = "DecodeCordicInstruction" in {
     defm QMUL       : P2InstLIDSm<0b11010000, "qmul">;
     defm QDIV       : P2InstLIDSm<0b11010001, "qdiv">;
+    defm QFRAC      : P2InstLIDSm<0b11010010, "qfrac">;
+    defm QSQRT      : P2InstLIDSm<0b11010011, "qsqrt">;
     defm QROTATE    : P2InstLIDSm<0b11010100, "qrotate">;
     defm QVECTOR    : P2InstLIDSm<0b11010101, "qvector">;
 }
