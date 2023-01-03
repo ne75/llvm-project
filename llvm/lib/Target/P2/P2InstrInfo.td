@@ -599,6 +599,23 @@ def GETBRK      : P2InstCZD<0b1101011, 0b000110101, (outs P2GPR:$d), (ins), "get
 defm COGBRK     : P2InstLDm<0b1101011, 0b000110101, "cogbrk">;
 defm BRK        : P2InstLDm<0b1101011, 0b000110110, "brk">;
 
+def POLLINT     : P2InstCZ<0b11010110, 0b000000000, 0b000100100, (outs), (ins), "pollint">;
+def POLLCT1     : P2InstCZ<0b11010110, 0b000000001, 0b000100100, (outs), (ins), "pollct1">;
+def POLLCT2     : P2InstCZ<0b11010110, 0b000000010, 0b000100100, (outs), (ins), "pollct2">;
+def POLLCT3     : P2InstCZ<0b11010110, 0b000000011, 0b000100100, (outs), (ins), "pollct3">;
+def POLLSE1     : P2InstCZ<0b11010110, 0b000000100, 0b000100100, (outs), (ins), "pollse1">;
+def POLLSE2     : P2InstCZ<0b11010110, 0b000000101, 0b000100100, (outs), (ins), "pollse2">;
+def POLLSE3     : P2InstCZ<0b11010110, 0b000000110, 0b000100100, (outs), (ins), "pollse3">;
+def POLLSE4     : P2InstCZ<0b11010110, 0b000000111, 0b000100100, (outs), (ins), "pollse4">;
+def POLLPAT     : P2InstCZ<0b11010110, 0b000001000, 0b000100100, (outs), (ins), "pollpat">;
+def POLLFBW     : P2InstCZ<0b11010110, 0b000001001, 0b000100100, (outs), (ins), "pollfbw">;
+def POLLXMT     : P2InstCZ<0b11010110, 0b000001010, 0b000100100, (outs), (ins), "pollxmt">;
+def POLLXFI     : P2InstCZ<0b11010110, 0b000001011, 0b000100100, (outs), (ins), "pollxfi">;
+def POLLXRO     : P2InstCZ<0b11010110, 0b000001100, 0b000100100, (outs), (ins), "pollxro">;
+def POLLXRL     : P2InstCZ<0b11010110, 0b000001101, 0b000100100, (outs), (ins), "pollxrl">;
+def POLLATN     : P2InstCZ<0b11010110, 0b000001110, 0b000100100, (outs), (ins), "pollatn">;
+def POLLQMT     : P2InstCZ<0b11010110, 0b000001111, 0b000100100, (outs), (ins), "pollqmt">; 
+
 /*--------------------------------*/
 /* misc instructions              */
 /*--------------------------------*/
