@@ -216,8 +216,10 @@ void P2InstrInfo::expand_ADD64(MachineInstr &MI) const {
             .addReg(RI.getSubReg(MI.getOperand(1).getReg(), P2::sub0))
             .addImm(MI.getOperand(2).getImm() & 0xffffffff)
             .addImm(P2::ALWAYS)
-            .addImm(P2::WC)
-            .addReg(P2::SW, RegState::ImplicitDefine);
+            .addImm(P2::WC);
+            // .addReg(P2::SW, RegState::ImplicitDefine);
+            // Remove this implicit define, I don't believe it's needed (maybe will be to mark that a condition is now invalid)
+            // keeping the comment in case we need to add it back when we let the compiler track the state of SW
         
         BuildMI(*mbb, MI, dl, get(P2::ADDXri))
             .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
@@ -231,8 +233,8 @@ void P2InstrInfo::expand_ADD64(MachineInstr &MI) const {
             .addReg(RI.getSubReg(MI.getOperand(1).getReg(), P2::sub0))
             .addReg(RI.getSubReg(MI.getOperand(2).getReg(), P2::sub0))
             .addImm(P2::ALWAYS)
-            .addImm(P2::WC)
-            .addReg(P2::SW, RegState::ImplicitDefine);
+            .addImm(P2::WC);
+            // .addReg(P2::SW, RegState::ImplicitDefine);
 
         BuildMI(*mbb, MI, dl, get(P2::ADDXrr))
             .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
