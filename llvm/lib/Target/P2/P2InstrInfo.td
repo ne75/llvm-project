@@ -119,7 +119,28 @@ defm SUBX   : P2InstCZIDS2i1om<0b0001101, "subx">;
 defm SUBS   : P2InstCZIDS2i1om<0b0001110, "subs">;
 defm SUBSX  : P2InstCZIDS2i1om<0b0001111, "subsx">;
 defm SUBR   : P2InstCZIDS2i1om<0b0010110, "subr">;
+
+defm FGE    : P2InstCZIDS2i1om<0b0011000, "fge">;
+defm FLE    : P2InstCZIDS2i1om<0b0011001, "fle">;
+defm FGES   : P2InstCZIDS2i1om<0b0011010, "fges">;
+defm FLES   : P2InstCZIDS2i1om<0b0011011, "fles">;
+defm SUMC   : P2InstCZIDS2i1om<0b0011100, "sumc">;
+defm SUMNC  : P2InstCZIDS2i1om<0b0011101, "sumnc">;
+defm SUMZ   : P2InstCZIDS2i1om<0b0011110, "sumz">;
+defm SUMNZ  : P2InstCZIDS2i1om<0b0011111, "sumnz">;
+
+// TODO: These will screw up the instruction parser/builder 
+// defm BITL   : P2InstCZIDS2i1om<0b0100000, "bitl">;
+// defm BITH   : P2InstCZIDS2i1om<0b0100001, "bith">;
+// defm BITC   : P2InstCZIDS2i1om<0b0100010, "bitc">;
+// defm BITNC  : P2InstCZIDS2i1om<0b0101000, "bitnc">;
+// defm BITZ   : P2InstCZIDS2i1om<0b0100011, "bitz">;
+// defm BITNZ  : P2InstCZIDS2i1om<0b0100100, "bitnz">;
+// defm BITRND : P2InstCZIDS2i1om<0b0100110, "bitrnd">;
+// defm BITNOT : P2InstCZIDS2i1om<0b0100111, "bitnot">;
+
 defm AND    : P2InstCZIDS2i1om<0b0101000, "and">;
+defm ANDN   : P2InstCZIDS2i1om<0b0101001, "andn">;
 defm OR     : P2InstCZIDS2i1om<0b0101010, "or">;
 defm XOR    : P2InstCZIDS2i1om<0b0101011, "xor">;
 defm ZEROX  : P2InstCZIDS2i1om<0b0111010, "zerox">;
@@ -140,7 +161,9 @@ let Constraints = "$s = $d" in {
 
 defm ENCOD  : P2InstCZIDSm<0b0111100, "encod">;
 defm DECOD  : P2InstIDSm<0b100111000, "decod">;
+defm BMASK  : P2InstIDSm<0b100111001, "bmask">;
 defm ONES   : P2InstCZIDSm<0b0111101, "ones">;
+
 
 // 64 bit pseudos
 let Constraints = "$s1 = $d" in {
