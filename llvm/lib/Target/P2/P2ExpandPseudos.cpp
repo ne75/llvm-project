@@ -80,6 +80,13 @@ void P2ExpandPseudos::expand_QUREM(MachineFunction &MF, MachineBasicBlock::itera
             .addReg(SI.getOperand(1).getReg())
             .addReg(SI.getOperand(2).getReg())
             .addImm(P2::ALWAYS);
+
+    // first call getqx so that we flush it out of the cordic. This is in case another cordic operation
+    // after this calls get qx before it's done. 
+    BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::GETQX), SI.getOperand(0).getReg())
+            .addReg(P2::QX)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
     BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::GETQY), SI.getOperand(0).getReg())
             .addReg(P2::QY)
             .addImm(P2::ALWAYS)
