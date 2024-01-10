@@ -6048,6 +6048,18 @@ def CogmainDocs : Documentation {
   is the entry function for a new cog in cogex mode.
   }];
 }
+
+def CogcacheDocs : Documentation {
+  let Category = DocCatFunction;
+  let Heading = "CogCache";
+  let Content = [{
+  Clang for P2 supports ``__attribute__((cogcache))`` attribute to mark that a function
+  should be cached in the cog for execution. Caching is only useful when we repeatedly call
+  small and shallow functions to see the performance boost, or for functions that require
+  the use of the FIFO streamer and must run from the cog. 
+  }];
+}
+
 def AlwaysInlineDocs : Documentation {
   let Category = DocCatFunction;
   let Content = [{

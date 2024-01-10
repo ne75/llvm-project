@@ -981,6 +981,7 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
       case Attribute::NoProfile:
       case Attribute::Cogmain:
       case Attribute::Cogtext:
+      case Attribute::Cogcache:
         break;
       }
 

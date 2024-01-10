@@ -7819,6 +7819,15 @@ static void handleCogmainAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
    handleSimpleAttribute<CogmainAttr>(S, D, AL);
 }
 
+static void handleCogcacheAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
+   if (!isFunctionOrMethod(D)) {
+      S.Diag(D->getLocation(), diag::warn_attribute_wrong_decl_type)
+         << "'cogcache'" << ExpectedFunctionOrMethod;
+      return;
+   }
+   handleSimpleAttribute<CogcacheAttr>(S, D, AL);
+}
+
 template <typename AttrTy>
 static const AttrTy *findEnforceTCBAttrByName(Decl *D, StringRef Name) {
   auto Attrs = D->specific_attrs<AttrTy>();
@@ -8531,6 +8540,10 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
 
   case ParsedAttr::AT_Cogmain:
     handleCogmainAttr(S, D, AL);
+    break;
+    
+  case ParsedAttr::AT_Cogcache:
+    handleCogcacheAttr(S, D, AL);
     break;
     
   case ParsedAttr::AT_EnforceTCB:

@@ -465,6 +465,7 @@ enum Kind {
   // P2 keywords
   kw_cogmain,
   kw_cogtext,
+  kw_cogcache,
 
   // Unsigned Valued tokens (UIntVal).
   LabelID,    // 42:

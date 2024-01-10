@@ -1878,6 +1878,9 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
     if (FD->hasAttr<CogmainAttr>()) {
       B.addAttribute(llvm::Attribute::Cogmain);
     }
+    if (FD->hasAttr<CogcacheAttr>()) {
+      B.addAttribute(llvm::Attribute::Cogcache);
+    }
   }
 
   F->addFnAttrs(B);

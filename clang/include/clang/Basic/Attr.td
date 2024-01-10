@@ -3827,11 +3827,17 @@ def Cogtext : InheritableAttr, TargetSpecificAttr<TargetP2> {
   let Args = [];
 }
 
-// Custom attributes for P2:
 def Cogmain : InheritableAttr, TargetSpecificAttr<TargetP2> {
   let Spellings = [Clang<"cogmain">];
   let Subjects = SubjectList<[Function]>;
   let Documentation = [CogmainDocs];
+  let Args = [];
+}
+
+def Cogcache : InheritableAttr, TargetSpecificAttr<TargetP2> {
+  let Spellings = [Clang<"cogcache">];
+  let Subjects = SubjectList<[Function]>;
+  let Documentation = [CogcacheDocs];
   let Args = [];
 }
 
