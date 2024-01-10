@@ -36,6 +36,9 @@ namespace llvm {
             // call subroutine
             CALL,
 
+            // call cached subrouting
+            CALLCACHE,
+
             // global address wrapper
             GAWRAPPER
         };

@@ -461,6 +461,10 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // node so that legalize doesn't hack it.
     bool GlobalOrExternal = false, InternalLinkage = false;
 
+    // check if callee is marked with cogcache. if it is, make callee a constant target of 0. idk if we should make it the global address 0
+    // or just an immediate 0. we still need the below code but we need to chain it to a new ISD operand, call it CALLCACHE
+    // this should lower to a mov pa, #addr followed by calla #0
+
     if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
         Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, getPointerTy(DAG.getDataLayout()), 0);
         GlobalOrExternal = true;
@@ -472,7 +476,7 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
         LLVM_DEBUG(errs() << "Callee is an external symbol\n");
         GlobalOrExternal = true;
-    }
+    } 
 
     SmallVector<SDValue, 8> Ops(1, Chain);
     SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
@@ -482,8 +486,13 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // buit the list of CopyToReg operations.
     getOpndList(Ops, RegsToPass, false, GlobalOrExternal, InternalLinkage, CLI, Callee, Chain);
 
-    // call the function
-    Chain = DAG.getNode(P2ISD::CALL, DL, NodeTys, Ops);
+    // call the function.
+    if (P2FI->isCogex()) {
+        Chain = DAG.getNode(P2ISD::CALLCACHE, DL, NodeTys, Ops);
+    } else {
+         Chain = DAG.getNode(P2ISD::CALL, DL, NodeTys, Ops);
+    }
+   
     SDValue InFlag = Chain.getValue(1);
 
     // end the call sequence

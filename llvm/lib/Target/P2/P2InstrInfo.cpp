@@ -640,6 +640,38 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
     MI.eraseFromParent();
 }
 
+void P2InstrInfo::expand_CALLCACHE(MachineInstr &MI) const {
+    auto mbb = MI.getParent();
+    auto dl = MI.getDebugLoc();
+
+    // generate two instructions: mov pa, op1 (either IMM or REG), calla #400 (400 is where we'll store the cacher)
+    if (MI.getOperand(0).isReg()) {
+        BuildMI(*mbb, MI, dl, get(P2::MOVrr))
+            .addDef(P2::PA)
+            .addReg(MI.getOperand(0).getReg())
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+
+        BuildMI(*mbb, MI, dl, get(P2::CALLAr))
+            .addReg(P2::PA)
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    } else {
+        BuildMI(*mbb, MI, dl, get(P2::MOVri))
+            .addDef(P2::PA)
+            .addReg(MI.getOperand(0).getReg())
+            .addImm(P2::ALWAYS)
+            .addImm(P2::NOEFF);
+    }
+
+    BuildMI(*mbb, MI, dl, get(P2::CALLAr))
+        .addImm(400) // address 400 is where we store our cacher function. TODO: make this externally set by the linker with a global address fixup
+        .addImm(P2::ALWAYS)
+        .addImm(P2::NOEFF);
+
+    MI.eraseFromParent();
+}
+
 bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     switch(MI.getOpcode()) {
         case P2::ADD64ri:
@@ -694,6 +726,11 @@ bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
         case P2::SELECTCC:
         case P2::SELECTCC64:
             expand_SELECTCC(MI);
+            return true;
+
+        case P2::CALLCACHEAa:
+        case P2::CALLCACHEAr:
+            expand_CALLCACHE(MI);
             return true;
     } 
 

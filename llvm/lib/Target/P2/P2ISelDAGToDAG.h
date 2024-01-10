@@ -40,6 +40,7 @@ namespace llvm {
         void Select(SDNode *N) override;
         void selectMultiplication(SDNode *N);
         bool selectAddr(SDValue addr, SDValue &addr_result);
+        void selectCacheCall(SDNode *N);
 
     public:
         explicit P2DAGToDAGISel(P2TargetMachine &TM, CodeGenOpt::Level OL)

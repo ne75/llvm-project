@@ -14,6 +14,7 @@ include "P2InstrFormats.td"
 /*--------------------------------*/
 
 def SDT_P2Call : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
+def SDT_P2CallCache : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
 def SDT_P2Mov : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
 def SDT_P2CallSeqStart : SDCallSeqStart<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
 def SDT_P2CallSeqEnd : SDCallSeqEnd<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
@@ -79,6 +80,7 @@ def P2WRLUT  : SDNode<"P2ISD::WRLUT", SDTStore, [SDNPHasChain, SDNPMayStore, SDN
 
 def P2RET   : SDNode<"P2ISD::RET", SDTNone, [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 def P2CALL  : SDNode<"P2ISD::CALL", SDT_P2Call, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPVariadic]>;
+def P2CALLCACHE  : SDNode<"P2ISD::CALLCACHE", SDT_P2CallCache, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPVariadic]>;
 
 def rdlut : PatFrag<(ops node:$ptr), (P2RDLUT node:$ptr)> {
     let IsNonExtLoad = 1;
@@ -519,6 +521,11 @@ let isCall = 1, Uses = [PTRA], DecoderMethod = "DecodeCallInstruction" in {
     def CALLAr   : P2InstCZD<0b1101011, 0b000101110, (outs), (ins P2GPR:$d), "calla $d">; // mainly use this for function calls with register input
 }
 
+let isCall = 1, Uses = [PA, PTRA] in {
+    def CALLCACHEAa : Pseudo<(outs), (ins abscalltarget:$a), "callacache $a">;
+    def CALLCACHEAr : Pseudo<(outs), (ins P2GPR:$d), "callacache $d">;
+}
+
 let Defs = [PTRA], Uses = [PTRA] in {
     def ADJCALLSTACKUP      : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2), "ADJCALLSTACKUP">;
     def ADJCALLSTACKDOWN    : Pseudo<(outs), (ins i32imm:$amt, i32imm:$amt2), "ADJCALLSTACKDOWN">;
@@ -534,6 +541,10 @@ def : Pat<(P2GAWrapper tjumptable:$addr), (MOVri tjumptable:$addr, always, noeff
 def : Pat<(P2CALL (i32 tglobaladdr:$dst)), (CALLAa tglobaladdr:$dst, always)>;
 def : Pat<(P2CALL (i32 texternalsym:$dst)), (CALLAa texternalsym:$dst, always)>;
 def : Pat<(P2CALL (i32 P2GPR:$d)), (CALLAr P2GPR:$d, always, noeff)>;
+
+def : Pat<(P2CALLCACHE (i32 tglobaladdr:$dst)), (CALLCACHEAa tglobaladdr:$dst)>;
+def : Pat<(P2CALLCACHE (i32 texternalsym:$dst)), (CALLCACHEAa texternalsym:$dst)>;
+def : Pat<(P2CALLCACHE (i32 P2GPR:$d)), (CALLCACHEAr P2GPR:$d)>;
 
 /*--------------------------------*/
 /* I/O and hardware control       */
