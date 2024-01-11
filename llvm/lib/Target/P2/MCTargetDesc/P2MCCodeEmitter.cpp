@@ -194,6 +194,7 @@ unsigned P2MCCodeEmitter::encodeAbsCallTarget(const MCInst &MI, unsigned OpNo, S
         return 0;
     }
 
+    LLVM_DEBUG(dbgs() << "operand should be immediate\n");
     assert(MO.isImm() && "non-immediate expression not handled by encodeCallTarget");
 
     auto Target = MO.getImm();

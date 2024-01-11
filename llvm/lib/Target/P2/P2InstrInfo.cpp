@@ -641,6 +641,9 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
 }
 
 void P2InstrInfo::expand_CALLCACHE(MachineInstr &MI) const {
+    LLVM_DEBUG(errs()<<"== lower callcache\n");
+    LLVM_DEBUG(MI.dump());
+
     auto mbb = MI.getParent();
     auto dl = MI.getDebugLoc();
 
@@ -652,22 +655,19 @@ void P2InstrInfo::expand_CALLCACHE(MachineInstr &MI) const {
             .addImm(P2::ALWAYS)
             .addImm(P2::NOEFF);
 
-        BuildMI(*mbb, MI, dl, get(P2::CALLAr))
-            .addReg(P2::PA)
-            .addImm(P2::ALWAYS)
-            .addImm(P2::NOEFF);
     } else {
+        LLVM_DEBUG(dbgs() << "create mov\n");
         BuildMI(*mbb, MI, dl, get(P2::MOVri))
             .addDef(P2::PA)
-            .addReg(MI.getOperand(0).getReg())
+            .addGlobalAddress(MI.getOperand(0).getGlobal())
             .addImm(P2::ALWAYS)
             .addImm(P2::NOEFF);
     }
 
-    BuildMI(*mbb, MI, dl, get(P2::CALLAr))
-        .addImm(400) // address 400 is where we store our cacher function. TODO: make this externally set by the linker with a global address fixup
-        .addImm(P2::ALWAYS)
-        .addImm(P2::NOEFF);
+    LLVM_DEBUG(dbgs() << "create call\n");
+    BuildMI(*mbb, MI, dl, get(P2::CALLAa))
+        .addImm(0x180) // address 0x180 is where we store our cacher function. TODO: make this externally set by the linker with a global address fixup
+        .addImm(P2::ALWAYS);
 
     MI.eraseFromParent();
 }

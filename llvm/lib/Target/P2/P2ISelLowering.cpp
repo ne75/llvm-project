@@ -459,20 +459,24 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // If the callee is a GlobalAddress/ExternalSymbol node (quite common, every
     // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
     // node so that legalize doesn't hack it.
-    bool GlobalOrExternal = false, InternalLinkage = false;
-
-    // check if callee is marked with cogcache. if it is, make callee a constant target of 0. idk if we should make it the global address 0
-    // or just an immediate 0. we still need the below code but we need to chain it to a new ISD operand, call it CALLCACHE
-    // this should lower to a mov pa, #addr followed by calla #0
+    bool GlobalOrExternal = false, InternalLinkage = false, CogCache = false;
 
     if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
         Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, getPointerTy(DAG.getDataLayout()), 0);
+        if (const Function *Func = dyn_cast<Function>(G->getGlobal())) {
+            CogCache = Func->hasFnAttribute(Attribute::Cogcache);
+        } else {
+            llvm_unreachable("trying to call something that's not a Function object");
+        }
+
         GlobalOrExternal = true;
         LLVM_DEBUG(errs() << "Callee is a global address\n");
     }  else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
         const char *Sym = S->getSymbol();
 
         Callee = DAG.getTargetExternalSymbol(Sym, getPointerTy(DAG.getDataLayout()));
+
+        // only RTTLIB functions should be here which aren't cached so it's okay to not check for cached attributes
 
         LLVM_DEBUG(errs() << "Callee is an external symbol\n");
         GlobalOrExternal = true;
@@ -486,11 +490,11 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // buit the list of CopyToReg operations.
     getOpndList(Ops, RegsToPass, false, GlobalOrExternal, InternalLinkage, CLI, Callee, Chain);
 
-    // call the function.
-    if (P2FI->isCogex()) {
+    // call the function, checking if the callee is marked with the cogcache attribute
+    if (CogCache) {
         Chain = DAG.getNode(P2ISD::CALLCACHE, DL, NodeTys, Ops);
     } else {
-         Chain = DAG.getNode(P2ISD::CALL, DL, NodeTys, Ops);
+        Chain = DAG.getNode(P2ISD::CALL, DL, NodeTys, Ops);
     }
    
     SDValue InFlag = Chain.getValue(1);
