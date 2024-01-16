@@ -214,9 +214,9 @@ def : Pat<(ineg i32immleaf:$s), (NEGri imm:$s, always, noeff)>;
 def : Pat<(bitreverse P2GPR:$s), (REV P2GPR:$s, always)>;
 
 // TODO: figure out why the zext pattern doesn't work in debug mode
-def : Pat<(i32 (zext i1:$s)), (ZEROXri P2GPR:$s, 0, always, noeff)>;
-def : Pat<(i32 (zext i8:$s)), (ZEROXri P2GPR:$s, 7, always, noeff)>;
-def : Pat<(i32 (zext i16:$s)), (ZEROXri P2GPR:$s, 15, always, noeff)>;
+// def : Pat<(i32 (zext i1:$s)), (ZEROXri P2GPR:$s, 0, always, noeff)>;
+// def : Pat<(i32 (zext i8:$s)), (ZEROXri P2GPR:$s, 7, always, noeff)>;
+// def : Pat<(i32 (zext i16:$s)), (ZEROXri P2GPR:$s, 15, always, noeff)>;
 
 def : Pat<(sext_inreg P2GPR:$d, i1), (SIGNXri P2GPR:$d, 0, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i8), (SIGNXri P2GPR:$d, 7, always, noeff)>;
