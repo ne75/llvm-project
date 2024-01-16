@@ -132,7 +132,7 @@ void P2MCInstLower::lowerInstruction(const MachineInstr &MI, MCInst &OutMI) cons
     OutMI.setFlags(flags);
 
     // mark that this MCInst will exist in a cogex function
-    if (MI.getMF()->getFunction().hasFnAttribute(Attribute::Cogmain) | MI.getMF()->getFunction().hasFnAttribute(Attribute::Cogtext)) flags |= (1<<13);
+    if (MI.getMF()->getFunction().hasFnAttribute(Attribute::Cogmain) || MI.getMF()->getFunction().hasFnAttribute(Attribute::Cogtext)) flags |= (1<<13);
 
     for (unsigned i = 0, e = MI.getNumOperands(); i != e; ++i) {
         const MachineOperand &MO = MI.getOperand(i);

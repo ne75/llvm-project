@@ -28,7 +28,17 @@ namespace llvm {
         // special immediates for rd/wrbyte/word/long that will modify PTRx
         enum name {
             PTRA_POSTINC = 0x161,
+            PTRB_POSTINC = 0x1e1,
+            
+            PTRA_POSTDEC = 0x17f,
+            PTRB_POSTDEC = 0x1ff,
+
+            PTRA_PREINC = 0x141,
+            PTRB_PREINC = 0x1c1,
+
             PTRA_PREDEC = 0x15f,
+            PTRB_PREDEC = 0x1df,
+
             PTRA_INDEX6 = 0x100, 
             PTRA_INDEX6_AUGS = 0x800000
         };

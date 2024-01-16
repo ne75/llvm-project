@@ -116,15 +116,34 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
     if (Op.isImm()) {
         // handle random access instructions which might use a PTRA expression
         if (isMIRandomAccess(MI)) {
-            if (Op.getImm() == P2::PTRA_POSTINC) {
-                O << "ptra++";
-                return;
+            switch (Op.getImm()) {
+                case P2::PTRA_POSTINC: 
+                    O << "ptra++";
+                    return;
+                case P2::PTRB_POSTINC: 
+                    O << "ptrb++";
+                    return;
+                case P2::PTRA_POSTDEC: 
+                    O << "ptra--";
+                    return;
+                case P2::PTRB_POSTDEC: 
+                    O << "ptrb--";
+                    return;
+                case P2::PTRA_PREINC: 
+                    O << "++ptra";
+                    return;
+                case P2::PTRB_PREINC: 
+                    O << "++ptrb";
+                    return;
+                case P2::PTRA_PREDEC:
+                    O << "--ptra";
+                    return;
+                case P2::PTRB_PREDEC: 
+                    O << "--ptrb";
+                    return;
+                default:
+                    break;
             }
-
-            if (Op.getImm() == P2::PTRA_PREDEC) {
-                O << "--ptra";
-                return;
-            }   
 
             // this is a D operand, so don't try to convert to a special immediate
             bool OpIsD = P2::getDNum(MII.get(MI->getOpcode()).TSFlags) == OpNum;

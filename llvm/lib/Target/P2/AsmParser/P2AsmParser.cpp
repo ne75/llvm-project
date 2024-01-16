@@ -13,6 +13,7 @@
 #include "P2RegisterInfo.h"
 #include "TargetInfo/P2TargetInfo.h"
 #include "P2InstrInfo.h"
+#include "MCTargetDesc/P2BaseInfo.h"
 
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -33,6 +34,10 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
+
+
+#include <iostream>
+
 
 using namespace llvm;
 
@@ -218,6 +223,7 @@ namespace {
         //bool parseEffectOperand(OperandVector &Operands, StringRef Mnemonic);
         int parseRegister(StringRef Mnemonic);
         bool tryParseRegisterOperand(OperandVector &Operands, StringRef Mnemonic);
+        bool tryParsePTRxOperand(OperandVector &Operands, StringRef Mnemonic);
         OperandMatchResultTy tryParseCallTarget(OperandVector &Operands);
         OperandMatchResultTy tryParseJmpTarget(OperandVector &Operands);
         int matchRegisterName(StringRef Symbol);
@@ -467,7 +473,7 @@ bool P2AsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name, S
         while (getLexer().is(AsmToken::Comma)) {
            Parser.Lex();  // Eat the comma
 
-           LLVM_DEBUG(errs() << "got another operand\n");
+           LLVM_DEBUG(dbgs() << "got another operand\n");
 
             // Parse and remember the operand.
             if (parseOperand(Operands, Name)) {
@@ -485,7 +491,7 @@ bool P2AsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name, S
 
         StringRef effect_flag;
         if (Parser.parseIdentifier(effect_flag)) {
-            return Error(effect_loc, "unexpected token in argument list");; // failed to parse identifier
+            return Error(effect_loc, "unexpected token in argument list - not an effect flag"); // failed to parse identifier
         }
 
         if (P2::effect_string_map.find(effect_flag) == P2::effect_string_map.end()) {
@@ -625,10 +631,107 @@ bool P2AsmParser::tryParseRegisterOperand(OperandVector &Operands, StringRef Mne
     return false;
 }
 
+bool P2AsmParser::tryParsePTRxOperand(OperandVector &Operands, StringRef Mnemonic) {
+    // for pre-reg expressions:
+    // first check if this last token is + or -. if it is, eat it and check the next token is the same. 
+    // if it is, eat it, check the next token is ptra or ptrb. if it is, eat it, build the correct immediate, return
+    // 
+    // for post-reg expressions
+    // check if the first token, is ptra/ptrb, then peek the next token and see if it's a + or -. 
+    // if it is, eat the ptra/ptrb, eat the two + or -. build the correct immedate. if the peeked token is
+    // not + or -, return error, making sure not to eat anything
+
+    SMLoc S = Parser.getTok().getLoc();
+    SMLoc E = Parser.getTok().getEndLoc();
+    const AsmToken &Tok = Parser.getTok(); // will be +, -, ptra/b, or another expr
+
+    std::string expr_str = "";
+    switch (Tok.getKind()) {
+        case AsmToken::Identifier: {
+            if (Tok.getString() == "ptra" || Tok.getString() == "ptrb") {
+                expr_str += Tok.getString();
+                const AsmToken &next_tok = Parser.getLexer().peekTok();
+
+                if (next_tok.getKind() == AsmToken::Plus) {
+                    Parser.Lex(); // eat the +
+                    const AsmToken &final_tok = Parser.Lex(); // get and eat the next +
+                    if (final_tok.getKind() == AsmToken::Plus) {
+                        // we've got 2 '+'
+                        expr_str += "++";
+                    }
+                    break;
+                }
+
+                if (next_tok.getKind() == AsmToken::Minus) {
+                    Parser.Lex(); // eat the -
+                    const AsmToken &final_tok = Parser.Lex(); // get and eat the next +
+                    if (final_tok.getKind() == AsmToken::Minus) {
+                        // we've got 2 '-'
+                        expr_str += "--";
+                    }
+                    break;
+                }
+            }
+            break;
+        }
+
+        case AsmToken::Plus: {
+            expr_str += "+";
+            const AsmToken &next_tok = Parser.Lex();
+            if (next_tok.getKind() == AsmToken::Plus) {
+                expr_str += "+";
+                const AsmToken &final_tok  = Parser.Lex();
+                if (final_tok.getKind() == AsmToken::Identifier) {
+                    if (final_tok.getString() == "ptra" || final_tok.getString() == "ptrb") {
+                        expr_str += final_tok.getString();
+                    }
+                }
+            }
+            break;
+        }
+
+        case AsmToken::Minus: {
+            expr_str += "-";
+            const AsmToken &next_tok = Parser.Lex();
+            if (next_tok.getKind() == AsmToken::Minus) {
+                expr_str += "-";
+                const AsmToken &final_tok  = Parser.Lex();
+                if (final_tok.getKind() == AsmToken::Identifier) {
+                    if (final_tok.getString() == "ptra" || final_tok.getString() == "ptrb") {
+                        expr_str += final_tok.getString();
+                    }
+                }
+            }
+            break;
+        }
+        default:
+            break;
+    }
+
+    int expr = StringSwitch<unsigned>(expr_str)
+        .Case("ptra++",     llvm::P2::PTRA_POSTINC)
+        .Case("ptrb++",     llvm::P2::PTRB_POSTINC)
+        .Case("ptra--",     llvm::P2::PTRA_POSTDEC)
+        .Case("ptrb--",     llvm::P2::PTRB_POSTDEC)
+        .Case("++ptra",     llvm::P2::PTRA_PREINC)
+        .Case("++ptrb",     llvm::P2::PTRB_PREINC)
+        .Case("--ptra",     llvm::P2::PTRA_PREDEC)
+        .Case("--ptrb",     llvm::P2::PTRB_PREDEC)
+        .Default(-1);
+
+    if (expr == -1) {
+        return true;
+    }
+
+    const MCConstantExpr *ptrx_expr = MCConstantExpr::create(expr, getContext());
+    Operands.push_back(P2Operand::CreateImm(ptrx_expr, S, E));
+    Parser.Lex(); // Eat register token.
+    return false;
+}
+
 bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
 
     LLVM_DEBUG(dbgs() << "Generic Operand Parser\n");
-
     AsmToken::TokenKind tok_kind = getLexer().getKind();
 
     switch (tok_kind) {
@@ -638,9 +741,18 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
         case AsmToken::Dollar:
             Parser.Lex(); // eat the dollar sign
             [[clang::fallthrough]];
+        case AsmToken::Minus:
+            [[clang::fallthrough]];
+        case AsmToken::Plus:
+            [[clang::fallthrough]];
         case AsmToken::Identifier: {
             // parse register
             SMLoc S = Parser.getTok().getLoc();
+
+            // is this a special PTRA/PTRB expression? 
+            if (!tryParsePTRxOperand(Operands, Mnemonic)) {
+                return false;
+            }
 
             // parse register operand
             if (!tryParseRegisterOperand(Operands, Mnemonic)) {
