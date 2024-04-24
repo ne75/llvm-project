@@ -263,6 +263,9 @@ let DecoderMethod = "DecodeCordicInstruction" in {
     defm QVECTOR    : P2InstLIDSm<0b11010101, "qvector">;
 }
 
+defm QLOG       : P2InstLDm<0b1101011, 0b000001110, "qlog">;
+defm QEXP       : P2InstLDm<0b1101011, 0b000001111, "qexp">;
+
 def QUDIV   : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src1, P2GPR:$src2), "udiv $dst, $src1, $src2">;
 def QUREM   : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src1, P2GPR:$src2), "urem $dst, $src1, $src2">;
 
