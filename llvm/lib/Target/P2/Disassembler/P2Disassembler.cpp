@@ -316,11 +316,16 @@ static DecodeStatus DecodeCordicInstruction(MCInst &Inst, unsigned Insn, uint64_
 
 static DecodeStatus DecodeGetQInstruction(MCInst &Inst, unsigned Insn, uint64_t Address, const void *Decoder) {
     LLVM_DEBUG(errs() << "getq decode\n");
+    
 
     unsigned d_field = fieldFromInstruction(Insn, 9, 9);
+    unsigned s_field = fieldFromInstruction(Insn, 0, 9);
 
     Inst.addOperand(MCOperand::createReg(getRegForField(d_field)));
-    Inst.addOperand(MCOperand::createReg(P2::GETQX));
+    if (s_field == 0b000011000)
+        Inst.addOperand(MCOperand::createReg(P2::QX));
+    else
+        Inst.addOperand(MCOperand::createReg(P2::QY));
 
     Inst.addOperand(getConditionOperand(Insn));
     int eff = fieldFromInstruction(Insn, 19, 2);
