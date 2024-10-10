@@ -495,6 +495,10 @@ def : Pat<(sextloadi1 addr:$s), (SIGNXri (RDBYTErr P2GPR:$s, always, noeff), 0, 
 def : Pat<(sextloadi8 addr:$s), (SIGNXri (RDBYTErr P2GPR:$s, always, noeff), 7, always, noeff)>;
 def : Pat<(sextloadi16 addr:$s), (SIGNXri (RDWORDrr P2GPR:$s, always, noeff), 15, always, noeff)>;
 
+def : Pat<(atomic_load_8 addr:$s), (RDBYTErr P2GPR:$s, always, noeff)>;
+def : Pat<(atomic_load_16 addr:$s), (RDWORDrr P2GPR:$s, always, noeff)>;
+def : Pat<(atomic_load_32 addr:$s), (RDLONGrr P2GPR:$s, always, noeff)>;
+
 def : Pat<(i32 (trunc P2GPRPair:$s)), (EXTRACT_SUBREG P2GPRPair:$s, sub0)>;
 
 /*--------------------------------*/
