@@ -282,10 +282,12 @@ namespace {
 
             bool has_d = P2::hasDField(MI.getFlags());
             bool has_s = P2::hasSField(MI.getFlags());
+            bool has_n = P2::hasNField(MI.getFlags());
             int s_num = P2::getSNum(MI.getFlags());
             int d_num = P2::getDNum(MI.getFlags());
+            int n_num = P2::getNNum(MI.getFlags());
 
-            LLVM_DEBUG(errs() << "has_d = " << has_d << " has_s = " << has_s << " s_num = " << s_num << " d_num = " << d_num << "\n");
+            LLVM_DEBUG(errs() << "has_d = " << has_d << " has_s = " << has_s << " has_n = " << has_n << " s_num = " << s_num << " d_num = " << d_num << " n_num = " << n_num << "\n");
 
             if (has_d && op_num == d_num) {
                 aug_type = 2;

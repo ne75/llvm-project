@@ -122,7 +122,7 @@ namespace llvm {
         }
 
         static inline int getDNum(uint64_t flags) {
-            return (flags >> 10) & 0x7;
+            return (flags >> 11) & 0x7;
         }
 
         static inline bool hasSField(uint64_t flags) {
@@ -130,7 +130,15 @@ namespace llvm {
         }
 
         static inline int getSNum(uint64_t flags) {
-            return (flags >> 7) & 0x7;
+            return (flags >> 8) & 0x7;
+        }
+
+        static inline bool hasNField(uint64_t flags) {
+            return ((flags >> 7) & 1) == 1;
+        }
+
+        static inline int getNNum(uint64_t flags) {
+            return (flags >> 14) & 0x7;
         }
 
         static inline int getInstructionForm(const MachineInstr &mi) {
@@ -151,6 +159,14 @@ namespace llvm {
 
         static inline int getSNum(const MachineInstr &mi) {
             return getSNum(mi.getDesc().TSFlags);
+        }
+
+        static inline bool hasNField(const MachineInstr &mi) {
+            return hasNField(mi.getDesc().TSFlags);
+        }
+
+        static inline int getNNum(const MachineInstr &mi) {
+            return getNNum(mi.getDesc().TSFlags);
         }
 
         static inline int getCondition(const MachineInstr &mi) {
