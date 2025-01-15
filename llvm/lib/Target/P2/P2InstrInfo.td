@@ -156,7 +156,16 @@ defm ABS    : P2InstCZIDSm<0b0110010, "abs">;
 defm NEG    : P2InstCZIDSm<0b0110011, "neg">;
 
 let Constraints = "$s = $d" in {
-    def REV    : P2InstD<0b1101011, 0b001101001, (outs P2GPR:$d), (ins P2GPR:$s), "rev $d">;
+    def SPLITB  : P2InstD<0b1101011, 0b001100000, (outs P2GPR:$d), (ins P2GPR:$s), "splitb $d">;
+    def MERGEB  : P2InstD<0b1101011, 0b001100001, (outs P2GPR:$d), (ins P2GPR:$s), "mergeb $d">;
+    def SPLITW  : P2InstD<0b1101011, 0b001100010, (outs P2GPR:$d), (ins P2GPR:$s), "splitw $d">;
+    def MERGEW  : P2InstD<0b1101011, 0b001100011, (outs P2GPR:$d), (ins P2GPR:$s), "mergew $d">;
+    def SEUSSF  : P2InstD<0b1101011, 0b001100100, (outs P2GPR:$d), (ins P2GPR:$s), "seussf $d">;
+    def SEUSSR  : P2InstD<0b1101011, 0b001100101, (outs P2GPR:$d), (ins P2GPR:$s), "seussr $d">;
+    def RGBSQZ  : P2InstD<0b1101011, 0b001100110, (outs P2GPR:$d), (ins P2GPR:$s), "rgbsqz $d">;
+    def RGBEXP  : P2InstD<0b1101011, 0b001100111, (outs P2GPR:$d), (ins P2GPR:$s), "rgbexp $d">;
+    def XORO32  : P2InstD<0b1101011, 0b001101000, (outs P2GPR:$d), (ins P2GPR:$s), "xoro32 $d">;
+    def REV     : P2InstD<0b1101011, 0b001101001, (outs P2GPR:$d), (ins P2GPR:$s), "rev $d">;
 }
 
 defm ENCOD  : P2InstCZIDSm<0b0111100, "encod">;
@@ -501,12 +510,24 @@ def : Pat<(atomic_load_32 addr:$s), (RDLONGrr P2GPR:$s, always, noeff)>;
 
 def : Pat<(i32 (trunc P2GPRPair:$s)), (EXTRACT_SUBREG P2GPRPair:$s, sub0)>;
 
+
+defm SETNIB     : P2Inst3NIDSm<0b100000, "setnib">;
+defm GETNIB     : P2Inst3NIDSm<0b100001, "getnib">;
+defm ROLNIB     : P2Inst3NIDSm<0b100010, "rolnib">;
+defm SETBYTE    : P2Inst2NIDSm<0b1000110, "setbyte">;
+defm GETBYTE    : P2Inst2NIDSm<0b1000111, "getbyte">;
+defm ROLBYTE    : P2Inst2NIDSm<0b1001000, "rolbyte">;
+defm SETWORD    : P2Inst1NIDSm<0b10010010, "setword">;
+defm GETWORD    : P2Inst1NIDSm<0b10010011, "getword">;
+defm ROLWORD    : P2Inst1NIDSm<0b10010100, "rolword">;
+
 /*--------------------------------*/
 /* Register indirection           */
 /*--------------------------------*/
 
 let hasSideEffects = 1 in {
     defm ALTS   : P2InstIDSm<0b100110010, "alts">;
+    defm ALTD   : P2InstIDSm<0b100110001, "altd">;
 }
 
 /*--------------------------------*/
@@ -516,6 +537,7 @@ let hasSideEffects = 1 in {
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
     def RET     : P2InstCZ<0b11010111, 0b000000000, 0b000101101, (outs), (ins), "ret">;
     def RETA    : P2InstCZ<0b11010111, 0b000000000, 0b000101110, (outs), (ins), "reta">; // primarily use this for returns
+    def RETB    : P2InstCZ<0b11010111, 0b000000000, 0b000101111, (outs), (ins), "retb">;
 }
 
 let isCall = 1, Uses = [PTRA], DecoderMethod = "DecodeCallInstruction" in {
@@ -670,3 +692,14 @@ def FRMIDX      : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src), "frmidx $dst, $src
 
 def AKPINir     : InstAlias<"$cc akpin $s", (WRPINir 1, P2GPR:$s, P2Cond:$cc)>;
 def AKPINii     : InstAlias<"$cc akpin $s", (WRPINii 1, i32imm:$s, P2Cond:$cc)>;
+
+def POPAri      : InstAlias<"$cc popa $d $cz", (RDLONGri P2GPR:$d, 0b101011111, P2Cond:$cc, P2Effect:$cz)>;
+def POPBri      : InstAlias<"$cc popb $d $cz", (RDLONGri P2GPR:$d, 0b111011111, P2Cond:$cc, P2Effect:$cz)>;
+
+
+def PUSHAri     : InstAlias<"$cc pusha $d", (WRLONGri P2GPR:$d, 0b101100001, P2Cond:$cc)>;
+def PUSHAii     : InstAlias<"$cc pusha $d", (WRLONGii i32imm:$d, 0b101100001, P2Cond:$cc)>;
+def PUSHBri     : InstAlias<"$cc pushb $d", (WRLONGri P2GPR:$d, 0b111100001, P2Cond:$cc)>;
+def PUSHBii     : InstAlias<"$cc pushb $d", (WRLONGii i32imm:$d, 0b111100001, P2Cond:$cc)>;
+
+
