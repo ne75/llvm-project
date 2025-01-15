@@ -76,7 +76,7 @@ let Namespace = "P2" in {
     def SW  : P2Reg<0, "sw">, DwarfRegNum<[32]>; // this is an implicit register representing the status word. it can not be directly accessed.
     def QX  : P2Reg<0, "qx">, DwarfRegNum<[33]>; // this is an implicit register for x result of cordic
     def QY  : P2Reg<0, "qy">, DwarfRegNum<[34]>; // this is an implicit register for y result of cordic
-    def N   : P2Reg<0, "n">, DwarfRegNum<[35]>; // implicit register for result of augs/augd instructions
+    def N   : P2Reg<0, "nn">, DwarfRegNum<[35]>; // implicit register for result of augs/augd instructions
 
     def IJMP3 : P2Reg<0x1f0, "ijmp3">, DwarfRegNum<[36]>;
     def IRET3 : P2Reg<0x1f1, "iret3">, DwarfRegNum<[37]>;
