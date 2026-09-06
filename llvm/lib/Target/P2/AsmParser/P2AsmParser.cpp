@@ -97,6 +97,7 @@ namespace {
         };
 
         SMLoc StartLoc, EndLoc;
+        bool ForceAug = false;
 
     public:
         void addRegOperands(MCInst &Inst, unsigned N) const {
@@ -116,6 +117,8 @@ namespace {
 
         void addImmOperands(MCInst &Inst, unsigned N) const {
             assert(N == 1 && "Invalid number of operands!");
+            if (ForceAug)
+                Inst.setFlags(Inst.getFlags() | (uint64_t(1) << (24 + Inst.getNumOperands())));
             const MCExpr *Expr = getImm();
             addExpr(Inst,Expr);
         }
@@ -166,9 +169,10 @@ namespace {
             return Op;
         }
 
-        static std::unique_ptr<P2Operand> CreateImm(const MCExpr *Val, SMLoc S, SMLoc E) {
+        static std::unique_ptr<P2Operand> CreateImm(const MCExpr *Val, SMLoc S, SMLoc E, bool ForceAug = false) {
             auto Op = std::make_unique<P2Operand>(k_Immediate);
             Op->Imm.Val = Val;
+            Op->ForceAug = ForceAug;
             Op->StartLoc = S;
             Op->EndLoc = E;
             return Op;
@@ -301,7 +305,8 @@ namespace {
             const MCOperand &MO = MI.getOperand(op_num);
             int aug_i = (MO.getImm() >> 9) & 0x7fffff;
 
-            createAugInst(Aug, aug_type, aug_i, P2::getCondition(MI));
+            unsigned Condition = P2::getCondition(MI);
+            createAugInst(Aug, aug_type, aug_i, Condition == 0 ? P2::ALWAYS : Condition);
         }
 
         /**
@@ -350,17 +355,59 @@ bool P2AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode, Operand
         case Match_Success: {
             Inst.setLoc(IDLoc);
 
+            // These spellings have two fixed encodings. TableGen's generic
+            // effect operand accepts either suffix, so select the encoding
+            // from the actual suffix instead of the first matching record.
+            unsigned CarryOpcode = 0, ZeroOpcode = 0;
+            switch (Inst.getOpcode()) {
+#define TEST_EFFECT(C, Z) case P2::C: case P2::Z: \
+                CarryOpcode = P2::C; ZeroOpcode = P2::Z; break;
+                TEST_EFFECT(TESTBcri, TESTBzri)
+                TEST_EFFECT(TESTBcrr, TESTBzrr)
+                TEST_EFFECT(TESTBNcri, TESTBNzri)
+                TEST_EFFECT(TESTBNcrr, TESTBNzrr)
+                TEST_EFFECT(TESTPci, TESTPzi)
+                TEST_EFFECT(TESTPcr, TESTPzr)
+                TEST_EFFECT(TESTPNci, TESTPNzi)
+                TEST_EFFECT(TESTPNcr, TESTPNzr)
+#undef TEST_EFFECT
+            default: break;
+            }
+            if (CarryOpcode) {
+                unsigned Effect = Inst.getOperand(Inst.getNumOperands() - 1).getImm();
+                if (Effect != P2::WC && Effect != P2::WZ)
+                    return Error(IDLoc, "testb/testbn/testp/testpn require wc or wz");
+                Inst.setOpcode(Effect == P2::WC ? CarryOpcode : ZeroOpcode);
+            }
+
+            uint64_t ForcedOperands = Inst.getFlags();
             Inst.setFlags(MII.get(Inst.getOpcode()).TSFlags);
             // insert augs/augd as needed
 
             if (canAug(Inst)) {
                 for (unsigned i = 0; i < Inst.getNumOperands(); i++) {
-                    auto MO = Inst.getOperand(i);
+                    auto &MO = Inst.getOperand(i);
+
+                    if (P2::hasNField(Inst.getFlags()) && i == P2::getNNum(Inst.getFlags())) {
+                        unsigned Width = 5 - P2::getInstructionForm(Inst.getFlags());
+                        if (!MO.isImm() || !isUIntN(Width, MO.getImm()))
+                            return Error(IDLoc, "nibble/byte/word index is out of range");
+                        continue;
+                    }
+                    if ((!P2::hasSField(Inst.getFlags()) || i != P2::getSNum(Inst.getFlags())) &&
+                        (!P2::hasDField(Inst.getFlags()) || i != P2::getDNum(Inst.getFlags())))
+                        continue;
 
                     if (MO.isImm()) {
                         auto imm = MO.getImm();
 
-                        if (!isUInt<9>(imm)) {
+                        if (MII.get(Inst.getOpcode()).OpInfo[i].OperandType == MCOI::OPERAND_PCREL) {
+                            if (!isInt<9>(imm))
+                                return Error(IDLoc, "short branch displacement must be in [-256, 255]");
+                            continue;
+                        }
+
+                        if (!isUInt<9>(imm) || (ForcedOperands & (uint64_t(1) << (24 + i)))) {
                             MCInst AugInst;
                             createAugInst(AugInst, Inst, i);
                             MO.setImm(imm & 0x1ff);
@@ -554,7 +601,7 @@ int P2AsmParser::matchRegisterByNumber(unsigned RegNum, StringRef Mnemonic) {
     // the hack here is that we assume RegNum correctly corresponds to the address, which is very fragile
     // so need a better way to set this up for converting number to register
     LLVM_DEBUG(dbgs() << "Matching register by number: " << RegNum << "\n");
-    if (RegNum > 512)
+    if (RegNum >= 512)
         return -1;
 
     return getReg(P2::P2GPRRegClassID, RegNum);
@@ -646,6 +693,29 @@ bool P2AsmParser::tryParsePTRxOperand(OperandVector &Operands, StringRef Mnemoni
     SMLoc S = Parser.getTok().getLoc();
     SMLoc E = Parser.getTok().getEndLoc();
     const AsmToken &Tok = Parser.getTok(); // will be +, -, ptra/b, or another expr
+
+    // A bracketed pointer offset is signed and scaled by the instruction's
+    // access size. Plain PTRA/PTRB remains a register operand.
+    if (Tok.is(AsmToken::Identifier) &&
+        (Tok.getString() == "ptra" || Tok.getString() == "ptrb") &&
+        Parser.getLexer().peekTok().is(AsmToken::LBrac)) {
+        bool IsB = Tok.getString() == "ptrb";
+        Parser.Lex(); // pointer
+        Parser.Lex(); // [
+        int64_t Index;
+        if (Parser.parseAbsoluteExpression(Index))
+            return true;
+        if (!Parser.getTok().is(AsmToken::RBrac))
+            return Error(Parser.getTok().getLoc(), "expected ']' after pointer index");
+        if (!isInt<6>(Index))
+            return Error(S, "pointer index must be in [-32, 31]");
+        E = Parser.getTok().getEndLoc();
+        Parser.Lex();
+        int Value = (IsB ? 0x180 : P2::PTRA_INDEX6) | (Index & 0x3f);
+        Operands.push_back(P2Operand::CreateImm(
+            MCConstantExpr::create(Value, getContext()), S, E));
+        return false;
+    }
 
     std::string expr_str = "";
     switch (Tok.getKind()) {
@@ -778,7 +848,7 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
             }
 
             // Otherwise create a symbol ref
-            MCSymbol *Sym = getContext().getOrCreateSymbol("$" + Identifier);
+            MCSymbol *Sym = getContext().getOrCreateSymbol(Identifier);
 
             const MCExpr *Res = MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None,getContext());
             Operands.push_back(P2Operand::CreateImm(Res, S, E));
@@ -803,8 +873,9 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
                 Operands.push_back(P2Operand::CreateAbsAddr(IdVal, S, E));
                 return false;
             } else {
-                if (Parser.getTok().getKind() == AsmToken::Hash)
-                    Parser.Lex(); // we might have an extra # for long immediates, remove it.
+                bool ForceAug = Parser.getTok().getKind() == AsmToken::Hash;
+                if (ForceAug)
+                    Parser.Lex();
 
                 const MCExpr *IdVal;
                 S = Parser.getTok().getLoc();
@@ -812,7 +883,7 @@ bool P2AsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
                     return true;
 
                 SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-                Operands.push_back(P2Operand::CreateImm(IdVal, S, E));
+                Operands.push_back(P2Operand::CreateImm(IdVal, S, E, ForceAug));
                 return false;
             }
         }

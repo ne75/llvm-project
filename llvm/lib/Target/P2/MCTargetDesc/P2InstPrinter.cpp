@@ -81,27 +81,7 @@ void P2InstPrinter::printInst(const MCInst *MI, uint64_t Address,
 }
 
 static void printExpr(const MCExpr *Expr, const MCAsmInfo *MAI, raw_ostream &OS) {
-    const MCSymbolRefExpr *SRE;
-
-    if (const auto *CE = dyn_cast<MCConstantExpr>(Expr)) {
-        OS << "0x";
-        OS.write_hex(CE->getValue());
-        return;
-    }
-
-    if (const auto *BE = dyn_cast<MCBinaryExpr>(Expr)) {
-        // can probably remove this -- there are no binary expressions in the P2 architecture
-        SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
-        const auto *CE = dyn_cast<MCConstantExpr>(BE->getRHS());
-        assert(SRE && CE && "Binary expression must be sym+const.");
-        //Offset = CE->getValue();
-    } else {
-        SRE = dyn_cast<MCSymbolRefExpr>(Expr);
-        assert(SRE && "Unexpected MCExpr type.");
-    }
-    assert(SRE->getKind() == MCSymbolRefExpr::VK_None);
-
-    SRE->getSymbol().print(OS, MAI);
+    Expr->print(OS, MAI);
 }
 
 void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &O) {
@@ -115,7 +95,8 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
 
     if (Op.isImm()) {
         // handle random access instructions which might use a PTRA expression
-        if (isMIRandomAccess(MI)) {
+        if (isMIRandomAccess(MI) &&
+            OpNum == P2::getSNum(MII.get(MI->getOpcode()).TSFlags)) {
             switch (Op.getImm()) {
                 case P2::PTRA_POSTINC: 
                     O << "ptra++";
@@ -164,7 +145,7 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
         }
 
         if (opc != P2::AUGD && opc != P2::AUGS)
-            if (!(isUInt<9>(Op.getImm() || isInt<9>(Op.getImm())))) O << "#";
+            if (!isUInt<9>(Op.getImm()) && !isInt<9>(Op.getImm())) O << "#";
 
         O << "#" << Op.getImm();
         return;
@@ -172,9 +153,10 @@ void P2InstPrinter::printOperand(const MCInst *MI, unsigned OpNum, raw_ostream &
 
     assert(Op.isExpr() && "unknown operand kind in printOperand");
 
-    if (isMICall(MI)) {
+    if (has20BitAbsAddr(MI))
         O << "#\\";
-    }
+    else
+        O << "#";
     printExpr(Op.getExpr(), &MAI, O);
 }
 

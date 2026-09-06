@@ -210,9 +210,9 @@ class P2Inst3NIDS<bits<6> op, bits<1> i, dag outs, dag inputs, string asmstr> :
     let TSFlags{6} = 1;
     let TSFlags{7} = 1;
 
-    let TSFlags{10-8} = 1; // s is always operand 1
-    let TSFlags{13-11} = 0; // d is always operand 0
-    let TSFlags{16-14} = 2; // n is always operand 2
+    let TSFlags{10-8} = 2; // operand 1 is the tied destination input
+    let TSFlags{13-11} = 0;
+    let TSFlags{16-14} = 3;
 }
 
 multiclass P2Inst3NIDSm<bits<6> op, string asmstr> {
@@ -242,9 +242,9 @@ class P2Inst2NIDS<bits<7> op, bits<1> i, dag outs, dag inputs, string asmstr> :
     let TSFlags{6} = 1;
     let TSFlags{7} = 1;
 
-    let TSFlags{10-8} = 1; // s is always operand 1
-    let TSFlags{13-11} = 0; // d is always operand 0
-    let TSFlags{16-14} = 2; // n is always operand 2
+    let TSFlags{10-8} = 2; // operand 1 is the tied destination input
+    let TSFlags{13-11} = 0;
+    let TSFlags{16-14} = 3;
 }
 
 multiclass P2Inst2NIDSm<bits<7> op, string asmstr> {
@@ -274,9 +274,9 @@ class P2Inst1NIDS<bits<8> op, bits<1> i, dag outs, dag inputs, string asmstr> :
     let TSFlags{6} = 1;
     let TSFlags{7} = 1;
     
-    let TSFlags{10-8} = 1; // s is always operand 1
-    let TSFlags{13-11} = 0; // d is always operand 0
-    let TSFlags{16-14} = 2; // n is always operand 2
+    let TSFlags{10-8} = 2; // operand 1 is the tied destination input
+    let TSFlags{13-11} = 0;
+    let TSFlags{16-14} = 3;
 }
 
 multiclass P2Inst1NIDSm<bits<8> op, string asmstr> {

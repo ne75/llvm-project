@@ -38,6 +38,7 @@ define void @inline_asm_imm_operand() {
 
 define void @inline_asm_large_imm_operand() {
 ; CHECK-LABEL: inline_asm_large_imm_operand:
+; CHECK: augs #1
 ; CHECK-NEXT: add r0, #488
     call void asm sideeffect "add r0, $0", "i"(i32 1000) nounwind
     ret void
