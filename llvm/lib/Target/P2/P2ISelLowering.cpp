@@ -81,6 +81,7 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::VACOPY, MVT::Other, Expand);
     setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
+    setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32, Custom);
     setOperationAction(ISD::STACKSAVE, MVT::Other, Expand);
     setOperationAction(ISD::STACKRESTORE, MVT::Other, Expand);
 
@@ -300,6 +301,9 @@ SDValue P2TargetLowering::lowerSelect64(SDValue Op, SelectionDAG &DAG) const {
 
 SDValue P2TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     switch (Op.getOpcode()) {
+        case ISD::DYNAMIC_STACKALLOC:
+            DAG.getContext()->emitError("P2 does not support variable-sized stack allocation");
+            return DAG.getMergeValues({DAG.getUNDEF(MVT::i32), Op.getOperand(0)}, SDLoc(Op));
         case ISD::GlobalAddress:
             return lowerGlobalAddress(Op, DAG);
         case ISD::BlockAddress: {
@@ -866,7 +870,12 @@ Register P2TargetLowering::getRegisterByName(const char *RegName, LLT VT, const 
             .Case("outb",   P2::OUTB)
             .Case("ina",    P2::INA)
             .Case("inb",    P2::INB)
-            .Default(-1);
+            .Default(0);
+
+    if (!Reg) {
+        MF.getFunction().getContext().emitError(Twine("invalid P2 register name: ") + RegName);
+        return P2::R0; // Keep lowering well-formed after the diagnostic.
+    }
 
     return Reg;
 }
