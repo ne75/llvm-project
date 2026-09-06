@@ -536,10 +536,10 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
         case P2::SETGT:
         case P2::SETGE:
             if (rhs.isImm()) {
-                cmp_op = P2::CMPSri;
+                cmp_op = P2::CMPri;
                 cmp_op_hi = P2::CMPSXri;
             } else {
-                cmp_op = P2::CMPSrr;
+                cmp_op = P2::CMPrr;
                 cmp_op_hi = P2::CMPSXrr;
             }
             break;

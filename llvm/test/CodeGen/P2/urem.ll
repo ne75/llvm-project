@@ -3,6 +3,7 @@
 define i32 @urem32_rr(i32 %a, i32 %b) {
 ; CHECK-LABEL:  urem32_rr:
 ; CHECK:        qdiv r0, r1
+; CHECK-NEXT:   getqx {{r[0-9]+}}
 ; CHECK-NEXT:   getqy r31
     %r = urem i32 %a, %b
     ret i32 %r

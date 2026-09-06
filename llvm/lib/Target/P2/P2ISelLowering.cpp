@@ -71,6 +71,7 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
 
     // See https://llvm.org/doxygen/TargetLowering_8h_source.html#l00192 for the various actions
     setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
+    setOperationAction(ISD::BlockAddress, MVT::i32, Custom);
 
     setOperationAction(ISD::MULHS, MVT::i32, Expand);
     setOperationAction(ISD::MULHU, MVT::i32, Expand);
@@ -88,6 +89,14 @@ P2TargetLowering::P2TargetLowering(const P2TargetMachine &TM) : TargetLowering(T
     setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
 
     setOperationAction(ISD::CTTZ, MVT::i32, Expand);
+    // ENCOD has no defined CLZ(0) result. Let legalization add the zero case.
+    setOperationAction(ISD::CTLZ, MVT::i32, Expand);
+    setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Legal);
+    // QMUL produces an unsigned product; legalization supplies signed-high
+    // corrections using the unsigned low/high operation.
+    setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
+    setOperationAction(ISD::MULHS, MVT::i32, Expand);
+    setOperationAction(ISD::MULHU, MVT::i32, Expand);
 
     // can expand mul instead of a libcall and it will just become mullo/hi, which we've already created
     // a lowering for
@@ -208,7 +217,7 @@ SDValue P2TargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const {
     SDValue adj = SDValue(DAG.getMachineNode(P2::SUBri, DL, vt, ops), 0);
     Chain = DAG.getStore(VAList.getValue(1), DL, adj, VAListPtr, MachinePointerInfo(SV));
 
-    return DAG.getLoad(VT, DL, Chain, adj, MachinePointerInfo(), std::min(vt.getSizeInBits(), VT.getSizeInBits())/8);
+    return DAG.getLoad(VT, DL, Chain, adj, MachinePointerInfo(), Align(1));
 }
 
 SDValue P2TargetLowering::lowerJumpTable(SDValue Op, SelectionDAG &DAG) const {
@@ -293,6 +302,12 @@ SDValue P2TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     switch (Op.getOpcode()) {
         case ISD::GlobalAddress:
             return lowerGlobalAddress(Op, DAG);
+        case ISD::BlockAddress: {
+            auto *BA = cast<BlockAddressSDNode>(Op);
+            SDValue Address = DAG.getTargetBlockAddress(
+                BA->getBlockAddress(), MVT::i32, BA->getOffset());
+            return DAG.getNode(P2ISD::GAWRAPPER, SDLoc(Op), MVT::i32, Address);
+        }
         case ISD::VASTART:
             return lowerVASTART(Op, DAG);
         case ISD::VAARG:
@@ -640,7 +655,7 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
             if (Flags.isByVal()) 
                 arg_size = Flags.getByValSize();
             else
-                arg_size = ValVT.getSizeInBits()/8; 
+                arg_size = VA.getLocVT().getStoreSize();
 
             last_formal_arg_offset = stack_size-VA.getLocMemOffset()-arg_size;
 
@@ -663,6 +678,8 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
                 // Create the SelectionDAG nodes corresponding to a load from this parameter
                 SDValue FIN = DAG.getFrameIndex(fi, MVT::i32);
                 ArgValue = DAG.getLoad(VA.getLocVT(), DL, Chain, FIN, MachinePointerInfo::getFixedStack(MF, fi));
+                if (ValVT != EVT(VA.getLocVT()))
+                    ArgValue = DAG.getNode(ISD::TRUNCATE, DL, ValVT, ArgValue);
             }
             
             InVals.push_back(ArgValue);

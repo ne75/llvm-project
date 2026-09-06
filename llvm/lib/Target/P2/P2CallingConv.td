@@ -26,6 +26,8 @@ def CC_P2 : CallingConv<[
 
 // Calling convention for variadic functions.
 def CC_P2_Vararg : CallingConv <[
+    CCIfByVal<CCPassByVal<1, 1>>,
+    CCIfType<[i1, i8, i16], CCPromoteToType<i32>>,
     // variable args are always passed through the stack with an alignment of 1.
     CCIfType<[i32], CCAssignToStack<4, 1>>,
     CCIfType<[i64], CCAssignToStack<8, 1>>,

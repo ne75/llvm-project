@@ -1,3 +1,5 @@
+; RUN: llc -march=p2 -verify-machineinstrs < %s | FileCheck %s
+; CHECK: rdbyte {{r[0-9]+}}, {{r[0-9]+}}
 @val = external global i1
 
 define i32 @main() {

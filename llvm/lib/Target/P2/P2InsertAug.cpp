@@ -120,7 +120,7 @@ namespace {
                     for (unsigned i = 0, e = MI.getNumOperands(); i != e; ++i) {
                         MachineOperand &MO = MI.getOperand(i);
 
-                        if ((MO.isImm() || MO.isGlobal() || MO.isJTI()) && canAug(MI)) {
+                        if ((MO.isImm() || MO.isGlobal() || MO.isJTI() || MO.isBlockAddress()) && canAug(MI)) {
                             if (MO.isImm()) {
                                 // basic immediates
                                 int imm = MO.getImm();

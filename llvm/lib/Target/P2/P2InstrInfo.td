@@ -45,7 +45,7 @@ def reljmptarget    : Operand<OtherVT> {
 def jmp9target    : Operand<OtherVT> {
     let EncoderMethod = "getJump9TargetOpValue";
     let DecoderMethod = "decodeJump9Target";
-    let OperandType = "OPERAND_IMMEDIATE";
+    let OperandType = "OPERAND_PCREL";
 }
 
 def abscalltarget : Operand<iPTR> {
@@ -231,7 +231,7 @@ def : Pat<(sext_inreg P2GPR:$d, i1), (SIGNXri P2GPR:$d, 0, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i8), (SIGNXri P2GPR:$d, 7, always, noeff)>;
 def : Pat<(sext_inreg P2GPR:$d, i16), (SIGNXri P2GPR:$d, 15, always, noeff)>;
 
-def : Pat<(i32 (ctlz P2GPR:$s)), (SUBRri (ENCODrr $s, always, noeff), 31, always, noeff)>;
+def : Pat<(i32 (ctlz_zero_undef P2GPR:$s)), (SUBRri (ENCODrr $s, always, noeff), 31, always, noeff)>;
 def : Pat<(i32 (ctpop P2GPR:$s)), (ONESrr $s, always, noeff)>;
 
 // basic 64 bit support. everything else should either expand or be a libcall
@@ -307,6 +307,7 @@ let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
     def CMPSXri : P2InstCZIDS<0b0010011, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpsx $d, $s">;
 }
 
+let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isBarrier = 1 in
 def JMPr        : P2InstCZD<0b1101011, 0b000101100, (outs), (ins P2GPR:$d), "jmp $d">;
 
 let DecoderMethod = "DecodeJumpInstruction", isBarrier = 1, isBranch = 1, isTerminator = 1 in {
@@ -314,7 +315,7 @@ let DecoderMethod = "DecodeJumpInstruction", isBarrier = 1, isBranch = 1, isTerm
     def JMPa    : P2InstRA<0b1101100, 0b0, (outs), (ins absjmptarget:$d, P2RegOrImm32:$cmp), "jmp $d">; // absolute address jump.
 }
 
-let DecoderMethod = "DecodeTJInstruction", isBranch = 1, isBarrier = 1, isTerminator = 1 in {
+let DecoderMethod = "DecodeTJInstruction", isBranch = 1, isTerminator = 1 in {
     // don't use multiclass here because we don't want to use the imm operand type
     def TJZrr   : P2InstIDS<0b101110010, 0b0, (outs), (ins P2GPR:$d, P2GPR:$s), "tjz $d, $s">;
     def TJZri   : P2InstIDS<0b101110010, 0b1, (outs), (ins P2GPR:$d, jmp9target:$s), "tjz $d, $s">;
@@ -394,7 +395,7 @@ def : Pat<(brcond P2GPR:$c, bb:$target), (TJNZri P2GPR:$c, bb:$target, always)>;
 def : Pat<(br bb:$target), (JMP bb:$target, 1, always)>;
 
 // indirect branch
-def : Pat<(brind P2GPR:$d), (JMPr P2GPR:$d, noeff, always)>;
+def : Pat<(brind P2GPR:$d), (JMPr P2GPR:$d, always, noeff)>;
 
 // these patterns break jump analysis, so might need to do it as a pass later to replace, or update the jump analysis
 // to select these instructions when appropriate
@@ -498,7 +499,7 @@ def WRDLONG     : Pseudo<(outs), (ins P2GPRPair:$reg, P2GPR:$addr), "wrdlong $re
 def : Pat<(i64 (load addr:$s)), (RDDLONG P2GPR:$s)>;
 
 def : Pat<(zextloadi1 imm:$s), (ZEROXri (RDBYTEri imm:$s, always, noeff), 0, always, noeff)>;
-def : Pat<(zextloadi1 addr:$s), (ZEROXri (RDBYTEri imm:$s, always, noeff), 0, always, noeff)>;
+def : Pat<(zextloadi1 addr:$s), (ZEROXri (RDBYTErr P2GPR:$s, always, noeff), 0, always, noeff)>;
 def : Pat<(zextloadi8 imm:$s), (RDBYTEri imm:$s, always, noeff)>;
 def : Pat<(zextloadi8 addr:$s), (RDBYTErr P2GPR:$s, always, noeff)>;
 def : Pat<(zextloadi16 imm:$s), (RDWORDri imm:$s, always, noeff)>;
@@ -581,6 +582,7 @@ def : Pat<(P2callseq_end timm:$amt1, timm:$amt2), (ADJCALLSTACKDOWN i32imm:$amt1
 
 def : Pat<(P2GAWrapper tglobaladdr:$addr), (MOVri tglobaladdr:$addr, always, noeff)>;
 def : Pat<(P2GAWrapper tjumptable:$addr), (MOVri tjumptable:$addr, always, noeff)>;
+def : Pat<(P2GAWrapper tblockaddress:$addr), (MOVri tblockaddress:$addr, always, noeff)>;
 
 def : Pat<(P2CALL (i32 tglobaladdr:$dst)), (CALLAa tglobaladdr:$dst, always)>;
 def : Pat<(P2CALL (i32 texternalsym:$dst)), (CALLAa texternalsym:$dst, always)>;
@@ -723,4 +725,3 @@ def PUSHAri     : InstAlias<"$cc pusha $d", (WRLONGri P2GPR:$d, 0b101100001, P2C
 def PUSHAii     : InstAlias<"$cc pusha $d", (WRLONGii i32imm:$d, 0b101100001, P2Cond:$cc)>;
 def PUSHBri     : InstAlias<"$cc pushb $d", (WRLONGri P2GPR:$d, 0b111100001, P2Cond:$cc)>;
 def PUSHBii     : InstAlias<"$cc pushb $d", (WRLONGii i32imm:$d, 0b111100001, P2Cond:$cc)>;
-

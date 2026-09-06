@@ -142,7 +142,7 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
 
         // offset can be up to 128, since the index for the special immediate is scaled by 4 when using rdlong/wrlong
         // later we can make this more generic for bytes and words too--adjusting the scale appropriately
-        if (offset/4 > 31 || offset/4 < -32) {
+        if (offset % 4 != 0 || offset/4 > 31 || offset/4 < -32) {
             imm = P2::PTRA_INDEX6_AUGS;
             imm += (offset) & 0xfffff; // offset is unscaled when using augs
 

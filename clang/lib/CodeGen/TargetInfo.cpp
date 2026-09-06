@@ -8291,10 +8291,38 @@ public:
 //===----------------------------------------------------------------------===//
 
 namespace {
+class P2ABIInfo : public DefaultABIInfo {
+public:
+  explicit P2ABIInfo(CodeGenTypes &CGT) : DefaultABIInfo(CGT) {}
+
+  Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
+                    QualType Ty) const override {
+    // P2 lays arguments downwards within the caller's upward-growing stack
+    // allocation. Trivial aggregates occupy their full byval size inline.
+    // DefaultABIInfo's va_arg of a pointer disagrees with that layout.
+    ABIArgInfo AI = classifyArgumentType(Ty);
+    bool Indirect = AI.isIndirect() && !AI.getIndirectByVal();
+    llvm::Type *MemTy = CGF.ConvertTypeForMem(Ty);
+    CharUnits Size = Indirect ? getContext().getTypeSizeInChars(getContext().VoidPtrTy)
+                              : getContext().getTypeSizeInChars(Ty);
+    llvm::Value *Current = CGF.Builder.CreateLoad(VAListAddr, "ap.cur");
+    llvm::Value *Next = CGF.Builder.CreateInBoundsGEP(
+        CGF.Int8Ty, Current,
+        llvm::ConstantInt::getSigned(CGF.IntPtrTy, -Size.getQuantity()), "ap.next");
+    CGF.Builder.CreateStore(Next, VAListAddr);
+    llvm::Type *SlotTy = Indirect ? MemTy->getPointerTo() : MemTy;
+    Address Slot(CGF.Builder.CreateBitCast(Next, SlotTy->getPointerTo()),
+                 CharUnits::One());
+    if (Indirect)
+      return Address(CGF.Builder.CreateLoad(Slot), CharUnits::One());
+    return Slot;
+  }
+};
+
 class P2TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   P2TargetCodeGenInfo(CodeGenTypes &CGT)
-      : TargetCodeGenInfo(std::make_unique<DefaultABIInfo>(CGT)) {}
+      : TargetCodeGenInfo(std::make_unique<P2ABIInfo>(CGT)) {}
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &CGM) const override {
