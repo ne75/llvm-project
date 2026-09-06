@@ -211,6 +211,14 @@ namespace {
 
     class P2AsmParser : public MCTargetAsmParser {
         MCAsmParser &Parser;
+        std::string PendingAugSExpr, PendingAugDExpr;
+        static std::string expressionKey(const MCExpr *Expr) {
+            std::string Text;
+            raw_string_ostream OS(Text);
+            Expr->print(OS, nullptr);
+            OS.flush();
+            return Text;
+        }
         // P2AssemblerOptions Options;
 
     #define GET_ASSEMBLER_HEADER
@@ -413,10 +421,37 @@ bool P2AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode, Operand
                             MO.setImm(imm & 0x1ff);
                             Out.emitInstruction(AugInst, getSTI());
                         }
+                    } else if (MO.isExpr() &&
+                               MII.get(Inst.getOpcode()).OpInfo[i].OperandType != MCOI::OPERAND_PCREL) {
+                        bool IsD = P2::hasDField(Inst.getFlags()) && i == P2::getDNum(Inst.getFlags());
+                        const std::string &Pending = IsD ? PendingAugDExpr : PendingAugSExpr;
+                        if (Pending != expressionKey(MO.getExpr())) {
+                            MCInst Aug;
+                            Aug.setOpcode(IsD ? P2::AUGD : P2::AUGS);
+                            Aug.addOperand(MCOperand::createExpr(MCBinaryExpr::createLShr(
+                                MO.getExpr(), MCConstantExpr::create(9, getContext()), getContext())));
+                            unsigned Condition = P2::getCondition(Inst);
+                            Aug.addOperand(MCOperand::createImm(Condition == 0 ? P2::ALWAYS : Condition));
+                            Out.emitInstruction(Aug, getSTI());
+                        }
                     }
                 }
             }
 
+            if (Inst.getOpcode() == P2::AUGS || Inst.getOpcode() == P2::AUGD) {
+                std::string &Pending = Inst.getOpcode() == P2::AUGS ? PendingAugSExpr : PendingAugDExpr;
+                Pending.clear();
+                if (Inst.getOperand(0).isExpr())
+                    if (const auto *Shift = dyn_cast<MCBinaryExpr>(Inst.getOperand(0).getExpr())) {
+                        const auto *Amount = dyn_cast<MCConstantExpr>(Shift->getRHS());
+                        if ((Shift->getOpcode() == MCBinaryExpr::LShr || Shift->getOpcode() == MCBinaryExpr::AShr) &&
+                            Amount && Amount->getValue() == 9)
+                            Pending = expressionKey(Shift->getLHS());
+                    }
+            } else {
+                PendingAugSExpr.clear();
+                PendingAugDExpr.clear();
+            }
             Out.emitInstruction(Inst, getSTI());
             return false;
         }

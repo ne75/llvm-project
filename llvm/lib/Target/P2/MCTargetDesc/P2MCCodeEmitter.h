@@ -39,7 +39,6 @@ namespace llvm {
         /**
          * return if the symbol is referencing the rtlib
          */
-        bool is_rtlib(const MCSymbol &sym) const;
 
     public:
         P2MCCodeEmitter(const MCInstrInfo &mcii, MCContext &Ctx_)
@@ -88,7 +87,6 @@ namespace llvm {
 
         unsigned getMemEncoding(const MCInst &MI, unsigned OpNo, SmallVectorImpl<MCFixup> &Fixups, const MCSubtargetInfo &STI) const;
 
-        unsigned getExprOpValue(const MCInst &MI, const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups, const MCSubtargetInfo &STI) const;
     };
 }
 

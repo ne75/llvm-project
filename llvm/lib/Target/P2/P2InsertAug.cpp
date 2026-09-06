@@ -91,7 +91,15 @@ namespace {
                 aug_i = (MO.getImm() >> 9) & 0x7fffff;
             }
 
-            createAugInst(MI, aug_type, aug_i, P2::getCondition(MI));
+            unsigned Condition = P2::getCondition(MI);
+            if (Condition == 0)
+                Condition = P2::ALWAYS;
+            if (MO.isImm())
+                createAugInst(MI, aug_type, aug_i, Condition);
+            else
+                BuildMI(*MI.getParent(), MI, MI.getDebugLoc(),
+                        TM.getInstrInfo()->get(aug_type == 1 ? P2::AUGS : P2::AUGD))
+                    .add(MO).addImm(Condition);
         }
 
         bool canAug(const MachineInstr &MI) const {
@@ -103,7 +111,7 @@ namespace {
                 type == P2::P2InstRA ||
                 type == P2::P2InstD || 
                 type == P2::P2InstCZ ||
-                type == P2::P2InstCZD | 
+                type == P2::P2InstCZD ||
                 type == 0) return false;
 
             return true;
@@ -120,6 +128,9 @@ namespace {
                     for (unsigned i = 0, e = MI.getNumOperands(); i != e; ++i) {
                         MachineOperand &MO = MI.getOperand(i);
 
+                        if ((!P2::hasSField(MI) || i != P2::getSNum(MI)) &&
+                            (!P2::hasDField(MI) || i != P2::getDNum(MI)))
+                            continue;
                         if ((MO.isImm() || MO.isGlobal() || MO.isJTI() || MO.isBlockAddress()) && canAug(MI)) {
                             if (MO.isImm()) {
                                 // basic immediates

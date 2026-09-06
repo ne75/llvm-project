@@ -136,106 +136,16 @@ unsigned P2MCCodeEmitter::getJump9TargetOpValue(const MCInst &MI, unsigned OpNo,
     return 0;
 }
 
-unsigned P2MCCodeEmitter::encodeCallTarget(const MCInst &MI, unsigned OpNo, SmallVectorImpl<MCFixup> &Fixups,
-                                            const MCSubtargetInfo &STI) const {
-    const MCOperand &MO = MI.getOperand(OpNo);
-
-    LLVM_DEBUG(errs() << "--- encode call target for operand: ");
-    LLVM_DEBUG(MO.dump());
-
-    if (MO.isExpr()) {
-        LLVM_DEBUG(errs() << "call target for operand is an expression of kind: ");
-        LLVM_DEBUG(errs() << (unsigned)MO.getExpr()->getKind() << "\n");
-        MCFixupKind FixupKind;
-        const MCSymbolRefExpr* expr = static_cast<const MCSymbolRefExpr*>(MO.getExpr());
-
-        LLVM_DEBUG(expr->dump());
-
-        if (is_rtlib(expr->getSymbol())) {
-            LLVM_DEBUG(errs() << "creating libcall (cog9) fixup fixup\n");
-            FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_COG9);
-        } else {
-            FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_PC20);
-        }
-
-        Fixups.push_back(MCFixup::create(0, MO.getExpr(), FixupKind, MI.getLoc()));
-        return 0;
-    }
-
-    assert(MO.isImm() && "non-immediate expression not handled by encodeCallTarget");
-
-    auto Target = MO.getImm();
-    return Target;
+unsigned P2MCCodeEmitter::encodeCallTarget(const MCInst &MI, unsigned OpNo,
+    SmallVectorImpl<MCFixup> &Fixups, const MCSubtargetInfo &STI) const {
+    return getJumpTargetOpValue(MI, OpNo, Fixups, STI);
 }
 
-unsigned P2MCCodeEmitter::encodeAbsCallTarget(const MCInst &MI, unsigned OpNo, SmallVectorImpl<MCFixup> &Fixups,
-                                            const MCSubtargetInfo &STI) const {
-    const MCOperand &MO = MI.getOperand(OpNo);
-
-    LLVM_DEBUG(errs() << "--- encode absolute call target for operand: ");
-    LLVM_DEBUG(MO.dump());
-
-    if (MO.isExpr()) {
-        LLVM_DEBUG(errs() << "call target for operand is an expression of kind: ");
-        LLVM_DEBUG(errs() << (unsigned)MO.getExpr()->getKind() << "\n");
-        MCFixupKind FixupKind;
-        const MCSymbolRefExpr* expr = static_cast<const MCSymbolRefExpr*>(MO.getExpr());
-
-        LLVM_DEBUG(expr->dump());
-
-        if (is_rtlib(expr->getSymbol())) {
-            LLVM_DEBUG(errs() << "creating libcall (cog9) fixup fixup\n");
-            FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_COG9);
-        } else {
-            FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_20);
-        }
-
-        Fixups.push_back(MCFixup::create(0, MO.getExpr(), FixupKind, MI.getLoc()));
-        return 0;
-    }
-
-    assert(MO.isImm() && "non-immediate expression not handled by encodeCallTarget");
-
-    auto Target = MO.getImm();
-    return Target;
-}
-
-unsigned P2MCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
-                                            const MCSubtargetInfo &STI) const {
-
-    MCExpr::ExprKind Kind = Expr->getKind();
-
-    LLVM_DEBUG(errs() << " --- kind = " << (unsigned)Kind << "\n");
-
-    if (Kind == MCExpr::Constant) {
-        LLVM_DEBUG(errs() << " --- expression is a constant\n");
-        return cast<MCConstantExpr>(Expr)->getValue();
-    }
-
-    if (Kind == MCExpr::Binary) {
-        LLVM_DEBUG(errs() << " --- expression is binary\n");
-        unsigned Res = getExprOpValue(MI, cast<MCBinaryExpr>(Expr)->getLHS(), Fixups, STI);
-        Res += getExprOpValue(MI, cast<MCBinaryExpr>(Expr)->getRHS(), Fixups, STI);
-        return Res;
-    }
-
-    if (Kind == MCExpr::SymbolRef) {
-        LLVM_DEBUG(errs() << " --- expression is symbol ref\n");
-        LLVM_DEBUG(MI.dump());
-        LLVM_DEBUG(Expr->dump());
-        MCFixupKind FixupKind = static_cast<MCFixupKind>(P2::fixup_P2_AUG20);
-        Fixups.push_back(MCFixup::create(0, Expr, FixupKind));
-        return 0;
-    }
-
-    if (Kind == MCExpr::Target) {
-        llvm_unreachable("no implementation for target expressions!");
-        return 0;
-    }
-
-    llvm_unreachable("unhandled expression operand!");
-
-    return 0;
+unsigned P2MCCodeEmitter::encodeAbsCallTarget(const MCInst &MI, unsigned OpNo,
+    SmallVectorImpl<MCFixup> &Fixups, const MCSubtargetInfo &STI) const {
+    // The linker determines execution placement from the defining section,
+    // never from the callee's spelling (e.g. an ordinary HUB function sqrt).
+    return getJumpAbsTargetOpValue(MI, OpNo, Fixups, STI);
 }
 
 /// getMachineOpValue - Return binary encoding of operand. If the machine
@@ -257,7 +167,30 @@ unsigned P2MCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &M
 
     // MO must be an Expr.
     assert(MO.isExpr());
-    return getExprOpValue(MI, MO.getExpr(), Fixups, STI);
+    unsigned Kind;
+    const MCExpr *Expr = MO.getExpr();
+    if (MI.getOpcode() == P2::AUGS || MI.getOpcode() == P2::AUGD) {
+        Kind = P2::fixup_P2_AUG23;
+        if (const auto *Shift = dyn_cast<MCBinaryExpr>(Expr)) {
+            const auto *Amount = dyn_cast<MCConstantExpr>(Shift->getRHS());
+            if ((Shift->getOpcode() == MCBinaryExpr::LShr ||
+                 Shift->getOpcode() == MCBinaryExpr::AShr) &&
+                Amount && Amount->getValue() == 9) {
+                Expr = Shift->getLHS();
+                Kind = P2::fixup_P2_AUG_HI23;
+            }
+        }
+    } else {
+        unsigned OpNo = 0;
+        while (&MI.getOperand(OpNo) != &MO)
+            ++OpNo;
+        Kind = OpNo == P2::getDNum(MCII.get(MI.getOpcode()).TSFlags)
+                   ? P2::fixup_P2_AUGD_LO9 : P2::fixup_P2_AUGS_LO9;
+    }
+    // Preserve the entire expression and signed addend in RELA. Evaluating
+    // only its children loses subtraction and carries across the 9-bit split.
+    Fixups.push_back(MCFixup::create(0, Expr, MCFixupKind(Kind), MI.getLoc()));
+    return 0;
 }
 
 /// getMemEncoding - Return binary encoding of memory related operand.
@@ -266,29 +199,6 @@ unsigned P2MCCodeEmitter::getMemEncoding(const MCInst &MI, unsigned OpNo, SmallV
                                             const MCSubtargetInfo &STI) const {
 
     llvm_unreachable("getMemEncoding not implemented");
-}
-
-bool P2MCCodeEmitter::is_rtlib(const MCSymbol &sym) const {
-    auto name = sym.getName();
-
-    const char* libcallRoutineNames[] = {
-        #define HANDLE_LIBCALL(code, name) name,
-        #include "llvm/IR/RuntimeLibcalls.def"
-        #undef HANDLE_LIBCALL
-        // add non-standard libcalls here
-        "__udivmoddi4"
-    };
-
-    ArrayRef<const char*> libCallRoutinesList = makeArrayRef(libcallRoutineNames);
-
-    for (auto s : libCallRoutinesList) {
-        if (s && name == StringRef(s)) {
-            LLVM_DEBUG(errs() << name << " is a libcall\n");
-            return true;
-        }
-    }
-
-    return false;
 }
 
 #include "P2GenMCCodeEmitter.inc"

@@ -42,12 +42,11 @@ void P2MCInstLower::Initialize(MCContext* C) {
 MCOperand P2MCInstLower::lowerSymbolOperand(const MachineOperand &MO, MachineOperandType MOTy) const {
     const MCSymbol *Symbol;
 
-    int Offset = 0;
+    int64_t Offset = 0;
 
     switch (MOTy) {
         case MachineOperand::MO_GlobalAddress:
             Symbol = AsmPrinter.getSymbol(MO.getGlobal());
-            Symbol->setExternal(false);
             Offset += MO.getOffset();
         break;
 
@@ -67,7 +66,6 @@ MCOperand P2MCInstLower::lowerSymbolOperand(const MachineOperand &MO, MachineOpe
         case MachineOperand::MO_ExternalSymbol:
             LLVM_DEBUG(errs() << "external symbol: " << MO.getSymbolName() << "\n");
             Symbol = AsmPrinter.GetExternalSymbolSymbol(MO.getSymbolName());
-            Symbol->setExternal(true);
         break;
 
         default:
@@ -77,8 +75,6 @@ MCOperand P2MCInstLower::lowerSymbolOperand(const MachineOperand &MO, MachineOpe
     const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, *Ctx);
 
     if (Offset) {
-        // Assume offset is never negative.
-        assert(Offset > 0);
         Expr = MCBinaryExpr::createAdd(Expr, MCConstantExpr::create(Offset, *Ctx), *Ctx);
     }
 
@@ -131,14 +127,15 @@ void P2MCInstLower::lowerInstruction(const MachineInstr &MI, MCInst &OutMI) cons
     auto flags = MI.getDesc().TSFlags;
     OutMI.setFlags(flags);
 
-    // mark that this MCInst will exist in a cogex function
-    if (MI.getMF()->getFunction().hasFnAttribute(Attribute::Cogmain) || MI.getMF()->getFunction().hasFnAttribute(Attribute::Cogtext)) flags |= (1<<13);
-
     for (unsigned i = 0, e = MI.getNumOperands(); i != e; ++i) {
         const MachineOperand &MO = MI.getOperand(i);
         MCOperand MCOp = lowerOperand(MO);
 
-        if (MCOp.isValid())
+        if (MCOp.isValid()) {
+            if (MCOp.isExpr() && (MI.getOpcode() == P2::AUGS || MI.getOpcode() == P2::AUGD))
+                MCOp = MCOperand::createExpr(MCBinaryExpr::createLShr(
+                    MCOp.getExpr(), MCConstantExpr::create(9, *Ctx), *Ctx));
             OutMI.addOperand(MCOp);
+        }
     }
 }
