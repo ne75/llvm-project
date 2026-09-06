@@ -499,6 +499,7 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
     const MachineOperand &t = MI.getOperand(3);     // register or immediate
     const MachineOperand &f = MI.getOperand(4);     // register or immediate
     int cc = MI.getOperand(5).getImm();             // condition code
+    const bool Is32Bit = RI.getRegClass(P2::P2GPRRegClassID)->contains(lhs.getReg());
 
     unsigned movt_op = P2::MOVrr;
     unsigned movf_op = P2::MOVrr;
@@ -535,11 +536,13 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
         case P2::SETLT:
         case P2::SETGT:
         case P2::SETGE:
+            // A standalone signed compare needs CMPS. In a 64-bit compare,
+            // the low word still uses CMP to feed its borrow into CMPSX.
             if (rhs.isImm()) {
-                cmp_op = P2::CMPri;
+                cmp_op = Is32Bit ? P2::CMPSri : P2::CMPri;
                 cmp_op_hi = P2::CMPSXri;
             } else {
-                cmp_op = P2::CMPrr;
+                cmp_op = Is32Bit ? P2::CMPSrr : P2::CMPrr;
                 cmp_op_hi = P2::CMPSXrr;
             }
             break;
@@ -586,7 +589,7 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
     }
 
     // Compare operands
-    if (RI.getRegClass(P2::P2GPRRegClassID)->contains(lhs.getReg())) {
+    if (Is32Bit) {
         // this is the 32 bit compare.
         LLVM_DEBUG(errs() << "32 bit condition\n");
         BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(cmp_op), P2::SW)
