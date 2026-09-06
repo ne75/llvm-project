@@ -20,6 +20,8 @@
 
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCELFObjectWriter.h"
@@ -33,33 +35,15 @@
 #define DEBUG_TYPE "p2-asm-backend"
 
 using namespace llvm;
-static unsigned adjustFixupValue(const MCFixup &Fixup, uint64_t Value, MCContext *Ctx = nullptr) {
-
-    unsigned Kind = Fixup.getKind();
-
-    // Add/subtract and shift
-    switch (Kind) {
-        case P2::fixup_P2_32:
-        case P2::fixup_P2_PC32:
-        case P2::fixup_P2_20:
-        case P2::fixup_P2_AUG20:
-        case P2::fixup_P2_COG9:
-            break;
-        case P2::fixup_P2_PC20:
-            Value -= 4; // a relative jump automatically includes the next instruction, so reduce the jump by 1 instruction (4 bytes)
-            Value &= 0xfffff; // mask the 20 bits in case the relative jump is negative
-
-            break;
-        case P2::fixup_P2_PCCOG9:
-            Value -= 4;
-            Value /= 4;
-            Value &= 0x1ff;
-            break;
-        default:
-            return 0;
+// RELA addends live in relocation records; unresolved fields stay zero.
+// Resolved PC-relative instruction fields are measured from the following PC.
+static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value) {
+    switch (Fixup.getKind()) {
+    case P2::fixup_P2_PC20: return Value - 4;
+    case P2::fixup_P2_PCCOG9: return uint64_t(int64_t(Value - 4) / 4);
+    case P2::fixup_P2_AUG_HI23: return Value >> 9;
+    default: return Value;
     }
-
-    return Value;
 }
 
 
@@ -72,48 +56,36 @@ void P2AsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
                         uint64_t Value, bool IsResolved,
                         const MCSubtargetInfo *STI) const {
 
-    LLVM_DEBUG(errs() << "-- applying fixup for ");
-    LLVM_DEBUG(Target.dump(); errs() << "\n");
-
-    LLVM_DEBUG(errs() << "pre-adjusted value is " << Value << "\n");
-
     MCFixupKind Kind = Fixup.getKind();
-    Value = adjustFixupValue(Fixup, Value);
-    uint64_t Mask = ((uint64_t)(-1) >> (64 - getFixupKindInfo(Kind).TargetSize));
-
-    if (!Value)
-        return; // Doesn't change encoding.
-
-    LLVM_DEBUG(errs() << "new value is " << Value << "\n");
-
-    // Where do we start in the object
+    const auto &Info = getFixupKindInfo(Kind);
+    if (IsResolved) {
+        if (Kind == P2::fixup_P2_PCCOG9 &&
+            ((Value - 4) % 4 || !isInt<9>(int64_t(Value - 4) / 4))) {
+            Asm.getContext().reportError(Fixup.getLoc(),
+                "short branch target is unaligned or out of range [-256, 255]");
+            return;
+        }
+        if (Kind == P2::fixup_P2_PC20 && !isInt<20>(Value - 4)) {
+            Asm.getContext().reportError(Fixup.getLoc(), "relative branch target is out of range");
+            return;
+        }
+        Value = adjustFixupValue(Fixup, Value);
+    } else {
+        Value = 0;
+    }
+    uint64_t Mask = (UINT64_MAX >> (64 - Info.TargetSize)) << Info.TargetOffset;
     unsigned Offset = Fixup.getOffset();
-    LLVM_DEBUG(errs() << "offset is: " << Offset << "\n");
-    // Number of bytes we need to fixup
-    unsigned NumBytes = (getFixupKindInfo(Kind).TargetSize + 7) / 8;
-    LLVM_DEBUG(errs() << "num bytes is: " << NumBytes << "\n");
-    // Grab current value, if any, from bits.
-    uint64_t CurVal = 0;
-
-    for (unsigned i = 0; i != NumBytes; ++i) {
-        CurVal |= (uint64_t)((uint8_t)Data[Offset + i]) << (i*8);
+    unsigned NumBytes = (Info.TargetOffset + Info.TargetSize + 7) / 8;
+    if (Offset + NumBytes > Data.size()) {
+        Asm.getContext().reportError(Fixup.getLoc(), "fixup extends beyond its fragment");
+        return;
     }
-
-    LLVM_DEBUG(errs() << "current value is: " << CurVal << "\n");
-
-    CurVal |= Value & Mask;
-
-    LLVM_DEBUG(errs() << "masked value is: " << CurVal << "\n");
-
-    // Write out the fixed up bytes back to the code/data bits.
-    LLVM_DEBUG(errs() << "Fixing up " << NumBytes << " bytes\n");
-
-    for (unsigned i = 0; i < NumBytes; i++) {
-        Data[Offset + i] = (uint8_t)((CurVal >> (i*8)) & 0xff);
-        LLVM_DEBUG(errs() << "Byte " << i << ": set data offset by " << Offset + i << " to " << ((CurVal >> (i*8)) & 0xff) << "\n");
-    }
-
-    LLVM_DEBUG(errs() << "-- done with fixup\n");
+    uint64_t Current = 0;
+    for (unsigned I = 0; I < NumBytes; ++I)
+        Current |= uint64_t(uint8_t(Data[Offset + I])) << (8 * I);
+    Current = (Current & ~Mask) | ((Value << Info.TargetOffset) & Mask);
+    for (unsigned I = 0; I < NumBytes; ++I)
+        Data[Offset + I] = uint8_t(Current >> (8 * I));
 }
 
 const MCFixupKindInfo &P2AsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
@@ -128,7 +100,11 @@ const MCFixupKindInfo &P2AsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
         { "fixup_P2_PC20",      0,      20,   MCFixupKindInfo::FKF_IsPCRel},
         { "fixup_P2_AUG20",     0,      20,   0},
         { "fixup_P2_COG9",      0,      9,    0},
-        { "fixup_P2_PCCOG9",    0,      9,    MCFixupKindInfo::FKF_IsPCRel}
+        { "fixup_P2_PCCOG9",    0,      9,    MCFixupKindInfo::FKF_IsPCRel},
+        { "fixup_P2_AUG_HI23",  0,      23,   0},
+        { "fixup_P2_AUGS_LO9",  0,      9,    0},
+        { "fixup_P2_AUGD_LO9",  9,      9,    0},
+        { "fixup_P2_AUG23",     0,      23,   0}
     };
 
     if (Kind < FirstTargetFixupKind)

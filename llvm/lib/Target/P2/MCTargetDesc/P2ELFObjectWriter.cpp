@@ -44,6 +44,13 @@ unsigned P2ELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target, 
     switch (Kind) {
     default:
         llvm_unreachable("invalid fixup kind!");
+    case P2::fixup_P2_AUG23: return ELF::R_P2_AUG23;
+    case FK_Data_1: return ELF::R_P2_8;
+    case FK_Data_2: return ELF::R_P2_16;
+    case FK_Data_8: return ELF::R_P2_64;
+    case P2::fixup_P2_AUG_HI23: return ELF::R_P2_AUG_HI23;
+    case P2::fixup_P2_AUGS_LO9: return ELF::R_P2_AUGS_LO9;
+    case P2::fixup_P2_AUGD_LO9: return ELF::R_P2_AUGD_LO9;
     case FK_Data_4:
     case P2::fixup_P2_32:
         Type = ELF::R_P2_32;

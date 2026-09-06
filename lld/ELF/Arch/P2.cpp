@@ -6,17 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// generally, programs will be creates as follows:
-//
-//   ld.lld -Ttext=0 -o foo foo.o
-//   objcopy -O binary --only-section=.text foo output.bin
-//
-// Note that the current P2 support is very preliminary so you can't
-// link any useful program yet, though.
-//
-//===----------------------------------------------------------------------===//
-
 #include "InputFiles.h"
+#include "InputSection.h"
+#include "SymbolTable.h"
 #include "Symbols.h"
 #include "Target.h"
 #include "lld/Common/ErrorHandler.h"
@@ -41,77 +33,111 @@ namespace lld {
             };
         } // namespace
 
+        static bool isLutSymbol(const Symbol *symbol) {
+            const auto *defined = dyn_cast_or_null<Defined>(symbol);
+            return defined && defined->section &&
+                   (defined->section->name == "lut" ||
+                    defined->section->name.startswith(".lut"));
+        }
+
+        static uint64_t lutAddress(const uint8_t *loc, uint64_t value) {
+            const Symbol *base = symtab->find("__p2_lut_load_start");
+            const Symbol *end = symtab->find("__p2_lut_load_end");
+            if (!base || !base->isDefined() || !end || !end->isDefined()) {
+                error(getErrorLocation(loc) + "LUT calls require __p2_lut_load_start and __p2_lut_load_end");
+                return 0;
+            }
+            uint64_t offset = value - base->getVA();
+            if (value < base->getVA() || value >= end->getVA() || offset >= 2048 || offset % 4) {
+                error(getErrorLocation(loc) + "LUT call target is outside the aligned 512-long LUT image");
+                return 0;
+            }
+            return 0x200 + offset / 4;
+        }
+
         RelExpr P2::getRelExpr(RelType type, const Symbol &s, const uint8_t *loc) const {
             switch (type) {
-                default:
-                    return R_ABS;
-                case R_P2_32:
-                case R_P2_20:
-                case R_P2_AUG20:
-                case R_P2_COG9:
-                    return R_ABS;
-                case R_P2_PC20:
-                    return R_PC;
+            case R_P2_NONE: return R_NONE;
+            case R_P2_PC32:
+            case R_P2_PCCOG9: return R_PC;
+            case R_P2_PC20: return isLutSymbol(&s) ? R_ABS : R_PC;
+            default: return R_ABS;
             }
         }
 
         void P2::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
-
-            if (rel.sym->isLocal()) {
-                LLVM_DEBUG(outs() << "symbol is local\n");
-            }
-
-            LLVM_DEBUG(outs() << "relocate: " << rel.sym->getName() << "\n");
-            LLVM_DEBUG(outs() << "reloc value is " << (int)val << "\n");
-
+            auto writeField = [&](unsigned offset, unsigned bits, uint64_t value) {
+                uint32_t mask = uint32_t((uint64_t(1) << bits) - 1) << offset;
+                write32le(loc, (read32le(loc) & ~mask) | ((value << offset) & mask));
+            };
             switch (rel.type) {
-                case R_P2_32: {
-                    write32le(loc, val);
-                    break;
+            case R_P2_NONE: return;
+            case R_P2_8:
+                checkIntUInt(loc, val, 8, rel); *loc = val; return;
+            case R_P2_16:
+                checkIntUInt(loc, val, 16, rel); write16le(loc, val); return;
+            case R_P2_32:
+            case R_P2_PC32:
+                checkIntUInt(loc, val, 32, rel); write32le(loc, val); return;
+            case R_P2_64:
+                write64le(loc, val); return;
+            case R_P2_PC20:
+                if (isLutSymbol(rel.sym)) {
+                    val = lutAddress(loc, val);
+                    write32le(loc, read32le(loc) & ~(1u << 20));
+                    checkUInt(loc, val, 20, rel);
+                } else {
+                    val -= 4;
+                    checkInt(loc, val, 20, rel);
                 }
-                case R_P2_PC20:
-                case R_P2_20: {
-                    uint32_t inst = read32le(loc);
-                    // extract the original 20 bit value, and add the the 20 bit value with wrapping
-                    uint32_t inst_val = (inst + val) & 0xfffff;
-                    uint32_t inst_code = inst & ~0xfffff;
-                    inst = inst_code + inst_val;
-
-                    write32le(loc, inst);
-                    break;
+                writeField(0, 20, val); return;
+            case R_P2_COG9: // legacy name-based calls; inspect actual placement
+            case R_P2_20:
+                if (isLutSymbol(rel.sym))
+                    val = lutAddress(loc, val);
+                if (rel.type == R_P2_COG9)
+                    write32le(loc, read32le(loc) & ~(1u << 20));
+                checkUInt(loc, val, 20, rel);
+                writeField(0, 20, val); return;
+            case R_P2_PCCOG9:
+                val -= 4;
+                if (val % 4)
+                    error(getErrorLocation(loc) + "unaligned short branch target");
+                val = uint64_t(int64_t(val) / 4);
+                checkInt(loc, val, 9, rel);
+                writeField(0, 9, val); return;
+            case R_P2_AUG_HI23:
+                checkIntUInt(loc, val, 32, rel);
+                writeField(0, 23, val >> 9); return;
+            case R_P2_AUG23:
+                checkIntUInt(loc, val, 23, rel);
+                writeField(0, 23, val); return;
+            case R_P2_AUGS_LO9:
+                writeField(0, 9, val); return;
+            case R_P2_AUGD_LO9:
+                writeField(9, 9, val); return;
+            case R_P2_AUG20: {
+                // Retain readable legacy objects, but reject a malformed pair
+                // before accessing the preceding instruction. New objects use
+                // independent high/D-low/S-low relocations.
+                if (rel.offset < 4) {
+                    error(getErrorLocation(loc) + "legacy AUG relocation has no preceding instruction");
+                    return;
                 }
-                case R_P2_AUG20: {
-                    // special relocation where we modify 2 instructions to perform an immediate load of a 20-bit (or greater) immediate.
-                    // by invoking the augd or augs instruction
-                    uint32_t inst = read32le(loc);
-                    uint32_t aug = read32le(loc-4) & ~0x7fffff; // the previous instruction is expected to be an AUGS/D
-
-                    //LLVM_DEBUG(outs() << "reloc offset: " << rel.offset << "\n");
-                    LLVM_DEBUG(outs() << "reloc value is " << (int)val << "\n");
-                    //LLVM_DEBUG(outs() << "adjusted value is " << (int)(val & 0x1ff) << "\n");
-
-                    inst += val & 0x1ff; // get the lower 9 bits into the current instruction
-                    aug |= (val >> 9); // get the upper 23 bits into the previous AUG instruction
-
-                    write32le(loc-4, aug);
-                    write32le(loc, inst);
-                    break;
+                uint32_t aug = read32le(loc - 4);
+                uint32_t opcode = aug & 0x0f800000;
+                if (opcode != 0x0f000000 && opcode != 0x0f800000) {
+                    error(getErrorLocation(loc) + "legacy AUG relocation is not preceded by AUGS/AUGD");
+                    return;
                 }
-                case R_P2_COG9: {
-                    uint32_t inst = read32le(loc);
-                    // TODO: make this more flexible. Eventually we want to mark any function/variable as being able to live in the cog.
-
-                    // Assumption: libcalls are placed at 0x200 in hub ram. Convert it to a lut address by removing the offset of the hubram address
-                    // divindg by 4 to convert to a cog address, and add 0x200 to get to the LUT address
-                    inst += (((val-0x200)/4) & 0x1ff) + 0x200;
-                    LLVM_DEBUG(outs() << "cog function relocation\n");
-                    LLVM_DEBUG(outs() << "original value is " << (int)val << "\n");
-                    LLVM_DEBUG(outs() << "adjusted value is " << (int)((((val-0x200)/4) & 0x1ff) + 0x200) << "\n");
-                    write32le(loc, inst);
-                    break;
-                }
-                default:
-                    error(getErrorLocation(loc) + "unrecognized relocation " + toString(rel.type));
+                unsigned shift = opcode == 0x0f800000 ? 9 : 0;
+                val += (read32le(loc) >> shift) & 0x1ff;
+                checkIntUInt(loc, val, 32, rel);
+                write32le(loc - 4, (aug & ~0x7fffffu) | ((val >> 9) & 0x7fffff));
+                writeField(shift, 9, val); return;
+            }
+            default:
+                error(getErrorLocation(loc) + "unrecognized relocation " + toString(rel.type));
             }
         }
 

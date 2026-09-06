@@ -44,6 +44,13 @@ namespace llvm {
             // 9 bit PC relative fixup for cog jumps
             fixup_P2_PCCOG9,
 
+            // Independent augmentation fields, each with the full expression.
+            fixup_P2_AUG_HI23,
+            fixup_P2_AUGS_LO9,
+            fixup_P2_AUGD_LO9,
+
+            fixup_P2_AUG23, // literal, unshifted AUG payload
+
             // Marker
             LastTargetFixupKind,
             NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind
