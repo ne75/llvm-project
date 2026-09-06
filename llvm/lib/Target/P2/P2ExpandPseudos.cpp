@@ -104,6 +104,32 @@ bool P2ExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
         MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
         while (MBBI != E) {
             MachineBasicBlock::iterator NMBBI = std::next(MBBI);
+            // At this stage frame references are still frame indexes. Numeric
+            // addresses in 256..511 are therefore absolute HUB addresses, not
+            // the PTRA/PTRB encodings introduced later by frame lowering.
+            unsigned RegisterOpcode = 0;
+            switch (MBBI->getOpcode()) {
+            case P2::RDBYTEri: RegisterOpcode = P2::RDBYTErr; break;
+            case P2::RDWORDri: RegisterOpcode = P2::RDWORDrr; break;
+            case P2::RDLONGri: RegisterOpcode = P2::RDLONGrr; break;
+            case P2::WRBYTEri: RegisterOpcode = P2::WRBYTErr; break;
+            case P2::WRWORDri: RegisterOpcode = P2::WRWORDrr; break;
+            case P2::WRLONGri: RegisterOpcode = P2::WRLONGrr; break;
+            case P2::WRBYTEii: RegisterOpcode = P2::WRBYTEir; break;
+            case P2::WRWORDii: RegisterOpcode = P2::WRWORDir; break;
+            case P2::WRLONGii: RegisterOpcode = P2::WRLONGir; break;
+            }
+            if (RegisterOpcode && MBBI->getOperand(1).isImm() &&
+                MBBI->getOperand(1).getImm() >= 256 &&
+                MBBI->getOperand(1).getImm() <= 511) {
+                Register Address = MF.getRegInfo().createVirtualRegister(&P2::P2GPRRegClass);
+                BuildMI(MBB, MBBI, MBBI->getDebugLoc(), TII->get(P2::MOVri), Address)
+                    .addImm(MBBI->getOperand(1).getImm())
+                    .addImm(P2::ALWAYS).addImm(P2::NOEFF);
+                MBBI->setDesc(TII->get(RegisterOpcode));
+                MBBI->getOperand(1).ChangeToRegister(Address, false);
+                Changed = true;
+            }
             switch (MBBI->getOpcode()) {
                 case P2::QUDIV:
                     expand_QUDIV(MF, MBBI);
