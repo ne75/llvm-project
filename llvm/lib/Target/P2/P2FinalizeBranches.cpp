@@ -38,7 +38,7 @@ namespace {
         P2FinalizeBranches(const P2TargetMachine &tm) : MachineFunctionPass(ID), TM(tm) {}
 
         StringRef getPassName() const override {
-            return "P2 Insert Augs/Augd";
+            return "P2 Finalize Branches";
         }
 
         bool isTJOpcode(MachineInstr &I) {
@@ -87,17 +87,22 @@ namespace {
             std::map<MachineBasicBlock *, unsigned> block_addresses; // track addresses of MBBs, relative to function start, in # of instructions 
             std::map<MachineInstr *, unsigned> branch_addresses; // track every TJ* instruction and where they are located
             int pc = 0;
+            bool UnknownLayout = false;
 
             // go through the entire function and find all possible branch destinations (the position of the MBB in the function)
             // and address of the TJ instructions that reference branch destinations
             for (auto &MBB : MF) {
+                UnknownLayout |= MBB.getAlignment() > Align(4);
                 block_addresses.insert(std::make_pair(&MBB, pc));
                 for (auto &MI : MBB) {
                     int s = 0;
                     // determine instruction size.
                     if (MI.isInlineAsm()) {
-                        // inline ASM is an estimate only, as calculated by LLVM. it should never be less than true, so its safe to use
-                        s = TII->getInlineAsmLength(MI.getOperand(0).getSymbolName(), *TM.getMCAsmInfo());
+                        // Directives such as .rept and .align are not bounded by
+                        // LLVM's textual instruction-count estimate. Use the
+                        // long branch form whenever layout is uncertain.
+                        UnknownLayout = true;
+                        s = 0;
                     } else if (isTJOpcode(MI)) {
                         // assume every TJ will expand into 2 instructions (for safety). this greatly simplifies calculating distnaces
                         // and it's a small corner case if it ends up needing to be only 1, so performance impact is small
@@ -117,7 +122,7 @@ namespace {
                 int d = block_addresses[br.first->getOperand(1).getMBB()] - br.second - 1; // -1 because a jmp of 0 is one instruction away
                 LLVM_DEBUG(errs() << "approcimate distance to branch: " << d << "\n");
 
-                if (!isInt<9>(d)) {
+                if (UnknownLayout || !isInt<9>(d)) {
                     LLVM_DEBUG(errs() << "branch too far, replacing with cmp/jmp\n");
                     replaceTJBranch(*br.first);
                     changed = true;
