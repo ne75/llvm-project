@@ -179,7 +179,7 @@ namespace llvm {
             case P2InstCZD:
             case P2InstCZ:
             case P2InstCZLD:
-                return mi.getOperand(mi.getNumOperands()-2).getImm();
+                return mi.getOperand(mi.getDesc().getNumOperands()-2).getImm();
                 break;
 
             
@@ -194,7 +194,7 @@ namespace llvm {
             case P2InstRA:
             case P2InstWRA:
             case P2InstN:
-                return mi.getOperand(mi.getNumOperands()-1).getImm();
+                return mi.getOperand(mi.getDesc().getNumOperands()-1).getImm();
                 break;
             
             default:

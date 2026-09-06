@@ -59,8 +59,10 @@ public:
     P2FunctionInfo(MachineFunction &MF)
         : MF(MF),
         SRetReturnReg(0),
+        call_ret_idx(0),
         VarArgsFrameOffset(0),
         VarArgsFrameIndex(0),
+        HasByvalArg(false),
         IncomingArgSize(0),
         CalleeSavedFrameSize(0)
         {

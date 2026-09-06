@@ -83,7 +83,8 @@ void P2ExpandPseudos::expand_QUREM(MachineFunction &MF, MachineBasicBlock::itera
 
     // first call getqx so that we flush it out of the cordic. This is in case another cordic operation
     // after this calls get qx before it's done. 
-    BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::GETQX), SI.getOperand(0).getReg())
+    Register Quotient = MF.getRegInfo().createVirtualRegister(&P2::P2GPRRegClass);
+    BuildMI(*SI.getParent(), SI, SI.getDebugLoc(), TII->get(P2::GETQX), Quotient)
             .addReg(P2::QX)
             .addImm(P2::ALWAYS)
             .addImm(P2::NOEFF);
@@ -97,6 +98,7 @@ void P2ExpandPseudos::expand_QUREM(MachineFunction &MF, MachineBasicBlock::itera
 
 bool P2ExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
     TII = TM.getInstrInfo();
+    bool Changed = false;
 
     for (auto &MBB : MF) {
         MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
@@ -105,9 +107,11 @@ bool P2ExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
             switch (MBBI->getOpcode()) {
                 case P2::QUDIV:
                     expand_QUDIV(MF, MBBI);
+                    Changed = true;
                     break;
                 case P2::QUREM:
                     expand_QUREM(MF, MBBI);
+                    Changed = true;
                     break;
             }
 
@@ -117,7 +121,7 @@ bool P2ExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
 
     LLVM_DEBUG(errs()<<"done with pseudo expansion\n");
 
-    return true;
+    return Changed;
 }
 
 FunctionPass *llvm::createP2ExpandPseudosPass(P2TargetMachine &tm) {

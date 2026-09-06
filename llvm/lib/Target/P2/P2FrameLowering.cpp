@@ -48,7 +48,7 @@ void P2FrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) 
         LLVM_DEBUG(errs() << "cog entry function, saving ptra[0] to r0\n");
         DebugLoc DL = MBB.findDebugLoc(MBBI);
         BuildMI(MBB, MBBI, DL, TII->get(P2::RDLONGrr))
-            .addReg(P2::R0)
+            .addDef(P2::R0)
             .addReg(P2::PTRA)
             .addImm(P2::ALWAYS)
             .addImm(P2::NOEFF);
@@ -115,185 +115,73 @@ void P2FrameLowering::determineCalleeSaves(MachineFunction &MF, BitVector &Saved
     // eventually might need to add to this to re-order the frame index based to match what will happen in spilling/restoring
 }
 
-bool P2FrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
-                                                ArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
-
-
-    unsigned CalleeFrameSize = 0;
-    DebugLoc DL = MBB.findDebugLoc(MI);
+namespace {
+// Model every register touched by SETQ block transfers. The first register is
+// explicit; the remaining registers and PTRA's update are implicit operands.
+void emitCSRBlock(MachineBasicBlock &MBB, MachineBasicBlock::iterator Where,
+                  ArrayRef<CalleeSavedInfo> CSI, unsigned Begin, unsigned End,
+                  const TargetInstrInfo &TII, bool Restore) {
     MachineFunction &MF = *MBB.getParent();
-    const P2Subtarget &STI = MF.getSubtarget<P2Subtarget>();
-    const TargetInstrInfo &TII = *STI.getInstrInfo();
-    P2FunctionInfo *P2FI = MF.getInfo<P2FunctionInfo>();
-    // MachineFrameInfo *MFI = &MF.getFrameInfo();
+    DebugLoc DL = MBB.findDebugLoc(Where);
+    auto Flag = Restore ? MachineInstr::FrameDestroy : MachineInstr::FrameSetup;
+    unsigned Count = End - Begin;
+    if (Count > 1)
+        BuildMI(MBB, Where, DL, TII.get(P2::SETQi))
+            .addImm(Count - 1).addImm(P2::ALWAYS).setMIFlag(Flag);
+    auto Transfer = BuildMI(MBB, Where, DL,
+                           TII.get(Restore ? P2::RDLONGri : P2::WRLONGri));
+    Transfer.addReg(CSI[Begin].getReg(), Restore ? RegState::Define : 0)
+        .addImm(Restore ? P2::PTRA_PREDEC : P2::PTRA_POSTINC)
+        .addImm(P2::ALWAYS);
+    if (Restore)
+        Transfer.addImm(P2::NOEFF);
+    for (unsigned I = Begin + 1; I < End; ++I)
+        Transfer.addReg(CSI[I].getReg(), Restore ? RegState::ImplicitDefine
+                                                : RegState::Implicit);
+    Transfer.addReg(P2::PTRA, RegState::Implicit)
+        .addReg(P2::PTRA, RegState::ImplicitDefine)
+        .addMemOperand(MF.getMachineMemOperand(
+            MachinePointerInfo(), Restore ? MachineMemOperand::MOLoad
+                                          : MachineMemOperand::MOStore,
+            Count * 4, Align(1)))
+        .setMIFlag(Flag);
+}
+}
 
-    LLVM_DEBUG(errs() << "=== Function: " << MF.getName() << " ===\n");
-    LLVM_DEBUG(errs() << "Spilling callee saves\n");
-
+bool P2FrameLowering::spillCalleeSavedRegisters(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+    ArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
     if (CSI.empty())
         return false;
-
-    CalleeFrameSize = CSI.size()*4;
-
-    // use auto-incrementing feature of ptra to write blocks of regsiters to ptra (instead of one register at a time)
-    // when doing this, we want to make sure the manual allocation of ptra happens after this code, so we mark each instruction
-    // as a FrameSetup instruction, then in emitPrologue, skip over any FrameSetup instructions we have.
-    //
-    // block size is 1 less than number of regs to write in a block transfer (which is also the number to give to setq)
-    uint16_t block_size = 0;
-    int block_first_reg = CSI[0].getReg();
-
-    LLVM_DEBUG(errs() << "reg: " << block_first_reg << "\n");
-
-    for (int i = 1; i < CSI.size(); i++) {
-
-        unsigned reg = CSI[i].getReg();
-        unsigned prev_reg = CSI[i-1].getReg();
-
-        uint16_t reg_encoding = TRI->getEncodingValue(reg);
-        uint16_t prev_reg_encoding = TRI->getEncodingValue(prev_reg);
-
-        bool IsNotLiveIn = !MBB.isLiveIn(reg);
-        // Add the callee-saved register as live-in only if it is not already a
-        // live-in register, this usually happens with arguments that are passed
-        // through callee-saved registers.
-        if (IsNotLiveIn) {
-            MBB.addLiveIn(reg);
-        }
-
-        if (reg_encoding - prev_reg_encoding != 1) {
-            // this is a new register block, so let's write the previous block first.
-
-            if (block_size) {
-                // if we have more than 1 reg to write, add setq.
-                BuildMI(MBB, MI, DL, TII.get(P2::SETQi))
-                    .addImm(block_size)
-                    .addImm(P2::ALWAYS)
-                    .setMIFlag(MachineInstr::FrameSetup);
-            }
-
-            // write the first block register to ptra, incrementing ptra. if we added setq above, it will write
-            // a block of registers.
-            BuildMI(MBB, MI, DL, TII.get(P2::WRLONGri), block_first_reg)
-                .addImm(P2::PTRA_POSTINC)
-                .addImm(P2::ALWAYS)
-                .setMIFlag(MachineInstr::FrameSetup);
-
-            LLVM_DEBUG(errs() << "New block transfer to reg " << block_first_reg << "\n");
-
-            block_size = 0;
-            block_first_reg = reg;
-        } else {
-            block_size++;
-        }
-
-        LLVM_DEBUG(errs() << "reg: " << reg << "\n");
+    const auto &TII = *MBB.getParent()->getSubtarget<P2Subtarget>().getInstrInfo();
+    for (const auto &Saved : CSI)
+        if (!MBB.isLiveIn(Saved.getReg()))
+            MBB.addLiveIn(Saved.getReg());
+    for (unsigned Begin = 0, End; Begin < CSI.size(); Begin = End) {
+        End = Begin + 1;
+        while (End < CSI.size() &&
+               TRI->getEncodingValue(CSI[End].getReg()) ==
+                   TRI->getEncodingValue(CSI[End - 1].getReg()) + 1)
+            ++End;
+        emitCSRBlock(MBB, MI, CSI, Begin, End, TII, false);
     }
-
-    if (block_size) {
-        BuildMI(MBB, MI, DL, TII.get(P2::SETQi))
-            .addImm(block_size)
-            .addImm(P2::ALWAYS)
-            .setMIFlag(MachineInstr::FrameSetup);
-    }
-
-    BuildMI(MBB, MI, DL, TII.get(P2::WRLONGri), block_first_reg)
-        .addImm(P2::PTRA_POSTINC)
-        .addImm(P2::ALWAYS)
-        .setMIFlag(MachineInstr::FrameSetup);
-
-    LLVM_DEBUG(errs() << "New block transfer to reg " << block_first_reg << "\n");
-
-    P2FI->setCalleeSavedFrameSize(CalleeFrameSize);
-
+    MBB.getParent()->getInfo<P2FunctionInfo>()->setCalleeSavedFrameSize(CSI.size() * 4);
     return true;
 }
 
-bool P2FrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
-                                                MutableArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
-    MachineFunction &MF = *MBB.getParent();
-    const P2Subtarget &STI = MF.getSubtarget<P2Subtarget>();
-    const TargetInstrInfo &TII = *STI.getInstrInfo();
-    // MachineFrameInfo *MFI = &MF.getFrameInfo();
-    DebugLoc DL = MBB.findDebugLoc(MI);
-
-    LLVM_DEBUG(errs() << "=== Function: " << MF.getName() << " ===\n");
-
-    LLVM_DEBUG(errs() << "Restore CSRs\n");
-    if (CSI.empty()) {
-        LLVM_DEBUG(errs() << "--- nothing to restore\n");
+bool P2FrameLowering::restoreCalleeSavedRegisters(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+    MutableArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
+    if (CSI.empty())
         return false;
+    const auto &TII = *MBB.getParent()->getSubtarget<P2Subtarget>().getInstrInfo();
+    for (unsigned End = CSI.size(), Begin; End; End = Begin) {
+        Begin = End - 1;
+        while (Begin && TRI->getEncodingValue(CSI[Begin].getReg()) ==
+                            TRI->getEncodingValue(CSI[Begin - 1].getReg()) + 1)
+            --Begin;
+        emitCSRBlock(MBB, MI, CSI, Begin, End, TII, true);
     }
-
-    // see spillCalleeSavedRegisters for explanation, this is just doing the same thin in reverse
-    //
-    // block size is 1 less than number of regs to write in a block transfer (which is also the number to give to setq)
-    // go in reverse order since we are auto-decrementing ptra
-    uint16_t block_size = 0;
-    int block_first_reg = CSI[CSI.size()-1].getReg();
-
-    LLVM_DEBUG(errs() << "reg: " << block_first_reg << "\n");
-
-    for (int i = CSI.size()-2; i >= 0; i--) {
-        unsigned reg = CSI[i].getReg();
-        unsigned prev_reg = CSI[i+1].getReg();
-
-        LLVM_DEBUG(errs() << "reg: " << reg << "\n");
-
-        uint16_t reg_encoding = TRI->getEncodingValue(reg);
-        uint16_t prev_reg_encoding = TRI->getEncodingValue(prev_reg);
-
-        bool IsNotLiveIn = !MBB.isLiveIn(reg);
-        // Add the callee-saved register as live-in only if it is not already a
-        // live-in register, this usually happens with arguments that are passed
-        // through callee-saved registers.
-        if (IsNotLiveIn) {
-            MBB.addLiveIn(reg);
-        }
-
-        if (prev_reg_encoding - reg_encoding != 1) {
-            // this is a new register block, so let's write the previous block first.
-
-            if (block_size) {
-                BuildMI(MBB, MI, DL, TII.get(P2::SETQi))
-                    .addImm(block_size)
-                    .addImm(P2::ALWAYS)
-                    .setMIFlag(MachineInstr::FrameDestroy);
-            }
-
-            BuildMI(MBB, MI, DL, TII.get(P2::RDLONGri), block_first_reg)
-                .addImm(P2::PTRA_PREDEC)
-                .addImm(P2::ALWAYS)
-                .addImm(P2::NOEFF)
-                .setMIFlag(MachineInstr::FrameDestroy);
-
-            LLVM_DEBUG(errs() << "New block transfer at reg " << block_first_reg << "\n");
-
-            block_size = 0;
-            block_first_reg = reg; // if this is a new block, save the register
-        } else {
-            block_size++;
-            block_first_reg--; // if not a new block, reduce reg by 1
-        }
-    }
-
-    // write the final block out
-
-    if (block_size) {
-        BuildMI(MBB, MI, DL, TII.get(P2::SETQi))
-            .addImm(block_size)
-            .addImm(P2::ALWAYS)
-            .setMIFlag(MachineInstr::FrameDestroy);
-    }
-
-    BuildMI(MBB, MI, DL, TII.get(P2::RDLONGri), block_first_reg)
-        .addImm(P2::PTRA_PREDEC)
-        .addImm(P2::ALWAYS)
-        .addImm(P2::NOEFF)
-        .setMIFlag(MachineInstr::FrameDestroy);
-
-    LLVM_DEBUG(errs() << "New block transfer to reg " << block_first_reg << "\n");
-
     return true;
 }
 

@@ -76,13 +76,13 @@ void P2InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     } else {
         if (RI.getRegClass(P2::P2GPRPairRegClassID)->MC->contains(DestReg, SrcReg)) {
             BuildMI(MBB, MI, DL, get(P2::MOVrr))
-                .addReg(RI.getSubReg(DestReg, P2::sub0))
+                .addDef(RI.getSubReg(DestReg, P2::sub0))
                 .addReg(RI.getSubReg(SrcReg, P2::sub0), getKillRegState(KillSrc))
                 .addImm(P2::ALWAYS)
                 .addImm(P2::NOEFF);
 
             BuildMI(MBB, MI, DL, get(P2::MOVrr))
-                .addReg(RI.getSubReg(DestReg, P2::sub1))
+                .addDef(RI.getSubReg(DestReg, P2::sub1))
                 .addReg(RI.getSubReg(SrcReg, P2::sub1), getKillRegState(KillSrc))
                 .addImm(P2::ALWAYS)
                 .addImm(P2::NOEFF);
@@ -159,13 +159,13 @@ void P2InstrInfo::adjustStackPtr(unsigned SP, int64_t amount, MachineBasicBlock 
 
 void P2InstrInfo::expand_MOVi64(MachineInstr &MI) const {
     BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(P2::MOVri))
-        .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
+        .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
         .addImm(MI.getOperand(1).getImm() & 0xffffffff)
         .addImm(P2::ALWAYS)
         .addImm(P2::NOEFF);
 
     BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(P2::MOVri))
-        .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
+        .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1))
         .addImm(MI.getOperand(1).getImm() >> 32)
         .addImm(P2::ALWAYS)
         .addImm(P2::NOEFF);
@@ -182,10 +182,12 @@ void P2InstrInfo::expand_RDDLONG(MachineInstr &MI) const {
     if (MI.getOperand(1).isImm()) opc = P2::RDLONGri;
 
     BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(opc))
-        .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
+        .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
         .add(MI.getOperand(1))
         .addImm(P2::ALWAYS)
-        .addImm(P2::NOEFF);
+        .addImm(P2::NOEFF)
+        .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1), RegState::ImplicitDefine)
+        .cloneMemRefs(MI);
 
     MI.eraseFromParent();
 }
@@ -201,7 +203,9 @@ void P2InstrInfo::expand_WRDLONG(MachineInstr &MI) const {
     BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(opc))
         .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
         .add(MI.getOperand(1))
-        .addImm(P2::ALWAYS);
+        .addImm(P2::ALWAYS)
+        .addReg(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub1), RegState::Implicit)
+        .cloneMemRefs(MI);
 
     MI.eraseFromParent();
 }
@@ -244,7 +248,7 @@ void P2InstrInfo::expand_ADD64(MachineInstr &MI) const {
             .addImm(P2::NOEFF);
     }
 
-    MI.removeFromParent();
+    MI.eraseFromParent();
 }
 
 void P2InstrInfo::expand_SUB64(MachineInstr &MI) const {
@@ -281,7 +285,7 @@ void P2InstrInfo::expand_SUB64(MachineInstr &MI) const {
             .addImm(P2::NOEFF);
     }
 
-    MI.removeFromParent();
+    MI.eraseFromParent();
 }
 
 void P2InstrInfo::expand_AND64(MachineInstr &MI) const {
@@ -318,7 +322,7 @@ void P2InstrInfo::expand_AND64(MachineInstr &MI) const {
             .addImm(P2::NOEFF);
     }
 
-    MI.removeFromParent();
+    MI.eraseFromParent();
 }
 
 void P2InstrInfo::expand_OR64(MachineInstr &MI) const {
@@ -355,7 +359,7 @@ void P2InstrInfo::expand_OR64(MachineInstr &MI) const {
             .addImm(P2::NOEFF);
     }
 
-    MI.removeFromParent();
+    MI.eraseFromParent();
 }
 
 void P2InstrInfo::expand_XOR64(MachineInstr &MI) const {
@@ -365,7 +369,7 @@ void P2InstrInfo::expand_XOR64(MachineInstr &MI) const {
     if (MI.getOperand(2).isImm()) {
         BuildMI(*mbb, MI, dl, get(P2::XORri))
             .addDef(RI.getSubReg(MI.getOperand(0).getReg(), P2::sub0))
-            .addReg(RI.getSubReg(MI.getOperand(1).getReg(), P2::sub1))
+            .addReg(RI.getSubReg(MI.getOperand(1).getReg(), P2::sub0))
             .addImm(MI.getOperand(2).getImm() & 0xffffffff)
             .addImm(P2::ALWAYS)
             .addImm(P2::NOEFF);
@@ -392,7 +396,7 @@ void P2InstrInfo::expand_XOR64(MachineInstr &MI) const {
             .addImm(P2::NOEFF);
     }
 
-    MI.removeFromParent();
+    MI.eraseFromParent();
 }
 
 void P2InstrInfo::expand_SEXT64(MachineInstr &MI) const {
@@ -420,7 +424,7 @@ void P2InstrInfo::expand_SEXT64(MachineInstr &MI) const {
         .addImm(P2::ALWAYS)
         .addImm(P2::NOEFF);
 
-    MI.removeFromParent();
+    MI.eraseFromParent();
 }
 
 void P2InstrInfo::expand_SEXTIR64(MachineInstr &MI) const {
@@ -452,7 +456,7 @@ void P2InstrInfo::expand_SEXTIR64(MachineInstr &MI) const {
         .addImm(P2::ALWAYS)
         .addImm(P2::NOEFF);    
 
-     MI.removeFromParent();
+     MI.eraseFromParent();
 }   
 
 void P2InstrInfo::expand_ZEXT64(MachineInstr &MI) const {
@@ -475,7 +479,7 @@ void P2InstrInfo::expand_ZEXT64(MachineInstr &MI) const {
         .addImm(P2::ALWAYS)
         .addImm(P2::NOEFF);
 
-    MI.removeFromParent();
+    MI.eraseFromParent();
 }
 
 /**
@@ -632,7 +636,7 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
 
     // move false value (if false)
     BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(movf_op))
-        .addReg(d.getReg())
+        .addDef(d.getReg())
         .add(f)
         .addImm(false_cond_imm)
         .addImm(P2::NOEFF);

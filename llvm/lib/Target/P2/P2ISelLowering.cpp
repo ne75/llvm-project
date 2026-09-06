@@ -520,12 +520,20 @@ SDValue P2TargetLowering::LowerCallResult(SDValue Chain, SDValue InFlag,
 
             // Transform the arguments stored on
             // physical registers into virtual ones
-            DAG.getMachineFunction().getRegInfo().addLiveIn(VA.getLocReg());
-            RetValue = DAG.getCopyFromReg(Chain, dl, VA.getLocReg(), VA.getValVT(), InFlag);
-            InVals.push_back(RetValue);
+            RetValue = DAG.getCopyFromReg(Chain, dl, VA.getLocReg(), VA.getLocVT(), InFlag);
 
             Chain = RetValue.getValue(1);
             InFlag = RetValue.getValue(2);
+            if (VA.getLocVT() != VA.getValVT()) {
+                if (VA.getLocInfo() == CCValAssign::SExt)
+                    RetValue = DAG.getNode(ISD::AssertSext, dl, VA.getLocVT(), RetValue,
+                                           DAG.getValueType(VA.getValVT()));
+                else if (VA.getLocInfo() == CCValAssign::ZExt)
+                    RetValue = DAG.getNode(ISD::AssertZext, dl, VA.getLocVT(), RetValue,
+                                           DAG.getValueType(VA.getValVT()));
+                RetValue = DAG.getNode(ISD::TRUNCATE, dl, VA.getValVT(), RetValue);
+            }
+            InVals.push_back(RetValue);
         } else {
             assert(VA.isMemLoc() && "Must be memory location.");
             llvm_unreachable("returning values via memory not yet supported!");
@@ -566,7 +574,8 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
     LLVM_DEBUG(errs() << " - next stack offset: " << stack_size << "\n");
 
     int fi = MFI->CreateFixedObject(4, stack_size, true); // frame index for where CALL saved the PC
-    MFI->mapLocalFrameObject(fi, MFI->getObjectOffset(fi)); // sets it as pre-allocated, I think
+    // Fixed incoming objects are already allocated by the caller. They must
+    // not enter the nonnegative local-frame-object map (used by MIR and PEI).
     P2FI->setCallRetIdx(fi);
 
     // this will hold the memory offset of the last argument for use by var args, if needed
@@ -712,8 +721,12 @@ SDValue P2TargetLowering::LowerReturn(SDValue Chain,
         // sanity check
         assert(VA.isRegLoc() && "Can only return in registers!");
 
-        if (RVLocs[i].getValVT() != RVLocs[i].getLocVT())
-            Val = DAG.getNode(ISD::BITCAST, DL, RVLocs[i].getLocVT(), Val);
+        if (VA.getValVT() != VA.getLocVT()) {
+            unsigned Extend = VA.getLocInfo() == CCValAssign::SExt ? ISD::SIGN_EXTEND
+                            : VA.getLocInfo() == CCValAssign::ZExt ? ISD::ZERO_EXTEND
+                                                                 : ISD::ANY_EXTEND;
+            Val = DAG.getNode(Extend, DL, VA.getLocVT(), Val);
+        }
 
         Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), Val, Flag);
 
@@ -764,6 +777,7 @@ void P2TargetLowering::getOpndList(SmallVectorImpl<SDValue> &Ops,
         Chain = CLI.DAG.getCopyToReg(Chain, CLI.DL, RegsToPass[i].first, RegsToPass[i].second, InFlag);
         InFlag = Chain.getValue(1);
     }
+    Ops[0] = Chain;
 
     // Add argument registers to the end of the list so that they are
     // known live into the call.

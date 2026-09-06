@@ -182,11 +182,11 @@ let Constraints = "$s1 = $d" in {
     def OR64rr      : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, P2GPRPair:$s), "or64 $d, $s">;
     def XOR64rr     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, P2GPRPair:$s), "xor64 $d, $s">;
 
-    def ADD64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "add64 $d, $s">;
-    def SUB64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "sub64 $d, $s">;
-    def AND64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "and64 $d, $s">;
-    def OR64ri      : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "or64 $d, $s">;
-    def XOR64ri     : Pseudo<(outs P2GPRPair:$d), (ins i64imm:$s1, P2GPRPair:$s), "xor64 $d, $s">;
+    def ADD64ri     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, i64imm:$s), "add64 $d, $s">;
+    def SUB64ri     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, i64imm:$s), "sub64 $d, $s">;
+    def AND64ri     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, i64imm:$s), "and64 $d, $s">;
+    def OR64ri      : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, i64imm:$s), "or64 $d, $s">;
+    def XOR64ri     : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, i64imm:$s), "xor64 $d, $s">;
 
     def SEXTIR64    : Pseudo<(outs P2GPRPair:$d), (ins P2GPRPair:$s1, i8imm:$s), "sextir64 $d, #$s">;
 }
@@ -289,6 +289,9 @@ def : Pat<(urem P2GPR:$src1, P2GPR:$src2), (QUREM P2GPR:$src1, P2GPR:$src2)>;
 // define branch instruction for various compare branches (equal, not equal, etc), they will probably be all subclasses of common branch with different effects stuck to it.
 // define a pattern that matched a compare instruction output inputting to one of the branch instructions for various IR conditional branch patterns
 
+def P2RegOrImm32 : Operand<i32>;
+def P2RegOrImm64 : Operand<i64>;
+
 let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
     // don't use the multiclass for this because these don't output to d
     def CMPrr   : P2InstCZIDS<0b0010000, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmp $d, $s">;
@@ -307,8 +310,8 @@ let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
 def JMPr        : P2InstCZD<0b1101011, 0b000101100, (outs), (ins P2GPR:$d), "jmp $d">;
 
 let DecoderMethod = "DecodeJumpInstruction", isBarrier = 1, isBranch = 1, isTerminator = 1 in {
-    def JMP     : P2InstRA<0b1101100, 0b1, (outs), (ins reljmptarget:$d, P2Implicit:$cmp), "jmp $d">; // relative address jump
-    def JMPa    : P2InstRA<0b1101100, 0b0, (outs), (ins absjmptarget:$d, P2Implicit:$cmp), "jmp $d">; // absolute address jump.
+    def JMP     : P2InstRA<0b1101100, 0b1, (outs), (ins reljmptarget:$d, P2RegOrImm32:$cmp), "jmp $d">; // relative address jump
+    def JMPa    : P2InstRA<0b1101100, 0b0, (outs), (ins absjmptarget:$d, P2RegOrImm32:$cmp), "jmp $d">; // absolute address jump.
 }
 
 let DecoderMethod = "DecodeTJInstruction", isBranch = 1, isBarrier = 1, isTerminator = 1 in {
@@ -405,10 +408,12 @@ def : Pat<(brcc SETNE, P2GPR:$lhs, 0, bb:$target), (TJNZri P2GPR:$lhs, bb:$targe
 /*--------------------------------*/
 
 // compare 32 bit values and select a 32 bit value
-def SELECTCC    : Pseudo<(outs P2GPR:$d), (ins P2GPR:$lhs, i32imm:$rhs, i32imm:$t, i32imm:$f, i8imm:$cc), "selectcc $d, $lhs, $rhs, $t, $f, $cc">;
+// Selection constrains register classes; expansion accepts either a register
+// or an immediate for these operands. They are not immediate-only MC operands.
+def SELECTCC    : Pseudo<(outs P2GPR:$d), (ins P2GPR:$lhs, P2RegOrImm32:$rhs, P2RegOrImm32:$t, P2RegOrImm32:$f, i8imm:$cc), "selectcc $d, $lhs, $rhs, $t, $f, $cc">;
 
 // compare 64 bit values and select a 64 bit value
-def SELECTCC64  : Pseudo<(outs P2GPR:$d), (ins P2GPRPair:$lhs, P2GPRPair:$rhs, i32imm:$t, i32imm:$f, i8imm:$cc), "selectcc64 $d, $lhs, $rhs, $t, $f, $cc">;
+def SELECTCC64  : Pseudo<(outs P2GPR:$d), (ins P2GPRPair:$lhs, P2RegOrImm64:$rhs, P2RegOrImm32:$t, P2RegOrImm32:$f, i8imm:$cc), "selectcc64 $d, $lhs, $rhs, $t, $f, $cc">;
 
 // compare 64 bit and select 64 bit is lowered to 2 SELECTCCs, so no pseudo exists
 
@@ -718,5 +723,4 @@ def PUSHAri     : InstAlias<"$cc pusha $d", (WRLONGri P2GPR:$d, 0b101100001, P2C
 def PUSHAii     : InstAlias<"$cc pusha $d", (WRLONGii i32imm:$d, 0b101100001, P2Cond:$cc)>;
 def PUSHBri     : InstAlias<"$cc pushb $d", (WRLONGri P2GPR:$d, 0b111100001, P2Cond:$cc)>;
 def PUSHBii     : InstAlias<"$cc pushb $d", (WRLONGii i32imm:$d, 0b111100001, P2Cond:$cc)>;
-
 
