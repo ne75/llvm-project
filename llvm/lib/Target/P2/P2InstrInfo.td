@@ -206,8 +206,6 @@ def : Pat<(sra P2GPR:$src1, P2GPR:$s), (SARrr P2GPR:$src1, P2GPR:$s, always, noe
 def : Pat<(sra P2GPR:$src1, i32immleaf:$s), (SARri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(add P2GPR:$src1, P2GPR:$s), (ADDrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
 def : Pat<(add P2GPR:$src1, i32immleaf:$s), (ADDri P2GPR:$src1, imm:$s, always, noeff)>;
-def : Pat<(add P2GPR:$src1, P2GPR:$s), (ADDXrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
-def : Pat<(add P2GPR:$src1, i32immleaf:$s), (ADDXri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(and P2GPR:$src1, P2GPR:$s), (ANDrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
 def : Pat<(and P2GPR:$src1, i32immleaf:$s), (ANDri P2GPR:$src1, imm:$s, always, noeff)>;
 def : Pat<(or P2GPR:$src1, P2GPR:$s), (ORrr P2GPR:$src1, P2GPR:$s, always, noeff)>;
