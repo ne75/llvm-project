@@ -125,7 +125,13 @@ bool P2AsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
 }
 
 void P2AsmPrinter::emitInstruction(const MachineInstr *MI) {
-    // every instruction emits up to two MCInsts, aug is optional. 
+    if (MI->isBundle()) {
+        for (const auto *Member = MI->getNextNode(); Member && Member->isInsideBundle();
+             Member = Member->getNextNode())
+            emitInstruction(Member);
+        return;
+    }
+    // Prefix bundles have already been expanded into individual MCInsts.
     MCInst I;
     MCInstLowering.lowerInstruction(*MI, I);
 

@@ -17,6 +17,7 @@
 #include "P2TargetMachine.h"
 #include "MCTargetDesc/P2BaseInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBundle.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetMachine.h"
@@ -134,6 +135,31 @@ namespace {
             for (auto &MBB : MF)
                 for (auto &MI : MBB)
                     changed |= TII->annotateFlagState(MI);
+
+            // Prefixes are hardware state for their consumer. Bundle only
+            // after layout decisions and all frame/augmentation expansion.
+            auto IsPrefix = [](const MachineInstr &MI) {
+                switch (MI.getOpcode()) {
+                case P2::AUGS: case P2::AUGD:
+                case P2::SETQi: case P2::SETQr:
+                case P2::SETQ2i: case P2::SETQ2r:
+                    return true;
+                default: return false;
+                }
+            };
+            for (auto &MBB : MF) {
+                auto I = MBB.instr_begin();
+                while (I != MBB.instr_end()) {
+                    if (!IsPrefix(*I)) { ++I; continue; }
+                    auto Begin = I;
+                    do { ++I; } while (I != MBB.instr_end() && IsPrefix(*I));
+                    assert(I != MBB.instr_end() && "P2 prefix without a consumer");
+                    auto End = std::next(I);
+                    finalizeBundle(MBB, Begin, End);
+                    I = End;
+                    changed = true;
+                }
+            }
 
             LLVM_DEBUG(errs() << "new MF:\n");
             LLVM_DEBUG(MF.dump());
