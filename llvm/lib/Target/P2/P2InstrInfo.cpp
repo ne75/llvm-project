@@ -738,6 +738,9 @@ bool P2InstrInfo::annotateFlagState(MachineInstr &MI) const {
         Effect = MI.getOperand(MI.getDesc().getNumOperands() - 1).getImm();
         break;
     }
+    // GETCT's WC bit selects the high counter half; it preserves C.
+    if (MI.getOpcode() == P2::GETCT)
+        Effect = 0;
     unsigned Cond = P2::getCondition(MI);
     // A partial flag write preserves the other flag. Predicated writes also
     // preserve both flags when their condition fails.
