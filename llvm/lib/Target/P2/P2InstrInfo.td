@@ -107,27 +107,27 @@ defm ROR    : P2InstCZIDS2i1om<0b0000000, "ror">;
 defm ROL    : P2InstCZIDS2i1om<0b0000001, "rol">;
 defm SHR    : P2InstCZIDS2i1om<0b0000010, "shr">;
 defm SHL    : P2InstCZIDS2i1om<0b0000011, "shl">;
-defm RCR    : P2InstCZIDS2i1om<0b0000100, "rcr">;
-defm RCL    : P2InstCZIDS2i1om<0b0000101, "rcl">;
+let Uses = [SW] in defm RCR    : P2InstCZIDS2i1om<0b0000100, "rcr">;
+let Uses = [SW] in defm RCL    : P2InstCZIDS2i1om<0b0000101, "rcl">;
 defm SAR    : P2InstCZIDS2i1om<0b0000110, "sar">;
 defm SAL    : P2InstCZIDS2i1om<0b0000111, "sal">;
 defm ADD    : P2InstCZIDS2i1om<0b0001000, "add">;
-defm ADDX   : P2InstCZIDS2i1om<0b0001001, "addx">;
+let Uses = [SW] in defm ADDX   : P2InstCZIDS2i1om<0b0001001, "addx">;
 defm ADDS   : P2InstCZIDS2i1om<0b0001010, "adds">;
-defm ADDSX  : P2InstCZIDS2i1om<0b0001011, "addsx">;
-defm SUBX   : P2InstCZIDS2i1om<0b0001101, "subx">;
+let Uses = [SW] in defm ADDSX  : P2InstCZIDS2i1om<0b0001011, "addsx">;
+let Uses = [SW] in defm SUBX   : P2InstCZIDS2i1om<0b0001101, "subx">;
 defm SUBS   : P2InstCZIDS2i1om<0b0001110, "subs">;
-defm SUBSX  : P2InstCZIDS2i1om<0b0001111, "subsx">;
+let Uses = [SW] in defm SUBSX  : P2InstCZIDS2i1om<0b0001111, "subsx">;
 defm SUBR   : P2InstCZIDS2i1om<0b0010110, "subr">;
 
 defm FGE    : P2InstCZIDS2i1om<0b0011000, "fge">;
 defm FLE    : P2InstCZIDS2i1om<0b0011001, "fle">;
 defm FGES   : P2InstCZIDS2i1om<0b0011010, "fges">;
 defm FLES   : P2InstCZIDS2i1om<0b0011011, "fles">;
-defm SUMC   : P2InstCZIDS2i1om<0b0011100, "sumc">;
-defm SUMNC  : P2InstCZIDS2i1om<0b0011101, "sumnc">;
-defm SUMZ   : P2InstCZIDS2i1om<0b0011110, "sumz">;
-defm SUMNZ  : P2InstCZIDS2i1om<0b0011111, "sumnz">;
+let Uses = [SW] in defm SUMC   : P2InstCZIDS2i1om<0b0011100, "sumc">;
+let Uses = [SW] in defm SUMNC  : P2InstCZIDS2i1om<0b0011101, "sumnc">;
+let Uses = [SW] in defm SUMZ   : P2InstCZIDS2i1om<0b0011110, "sumz">;
+let Uses = [SW] in defm SUMNZ  : P2InstCZIDS2i1om<0b0011111, "sumnz">;
 
 // TODO: These will screw up the instruction parser/builder 
 // defm BITL   : P2InstCZIDS2i1om<0b0100000, "bitl">;
@@ -256,12 +256,12 @@ def : Pat<(sext_inreg P2GPRPair:$d, i32), (SEXTIR64 P2GPRPair:$d, 31)>;
 /* More complicated math          */
 /*--------------------------------*/
 
-let DecoderMethod = "DecodeGetQInstruction" in {
+let DecoderMethod = "DecodeGetQInstruction", hasSideEffects = 1 in {
     def GETQX   : P2InstCZD<0b1101011, 0b000011000, (outs P2GPR:$d), (ins P2Implicit:$qx), "getqx $d">;
     def GETQY   : P2InstCZD<0b1101011, 0b000011001, (outs P2GPR:$d), (ins P2Implicit:$qy), "getqy $d">;
 }
 
-let DecoderMethod = "DecodeCordicInstruction" in {
+let DecoderMethod = "DecodeCordicInstruction", Defs = [QX, QY], hasSideEffects = 1 in {
     defm QMUL       : P2InstLIDSm<0b11010000, "qmul">;
     defm QDIV       : P2InstLIDSm<0b11010001, "qdiv">;
     defm QFRAC      : P2InstLIDSm<0b11010010, "qfrac">;
@@ -270,8 +270,8 @@ let DecoderMethod = "DecodeCordicInstruction" in {
     defm QVECTOR    : P2InstLIDSm<0b11010101, "qvector">;
 }
 
-defm QLOG       : P2InstLDm<0b1101011, 0b000001110, "qlog">;
-defm QEXP       : P2InstLDm<0b1101011, 0b000001111, "qexp">;
+let Defs = [QX, QY], hasSideEffects = 1 in defm QLOG       : P2InstLDm<0b1101011, 0b000001110, "qlog">;
+let Defs = [QX, QY], hasSideEffects = 1 in defm QEXP       : P2InstLDm<0b1101011, 0b000001111, "qexp">;
 
 def QUDIV   : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src1, P2GPR:$src2), "udiv $dst, $src1, $src2">;
 def QUREM   : Pseudo<(outs P2GPR:$dst), (ins P2GPR:$src1, P2GPR:$src2), "urem $dst, $src1, $src2">;
@@ -296,13 +296,13 @@ let DecoderMethod = "DecodeCmpInstruction", s_num = 2, d_num = 1 in {
     def CMPri   : P2InstCZIDS<0b0010000, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmp $d, $s">;
     def CMPRrr  : P2InstCZIDS<0b0010100, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpr $d, $s">;
     def CMPRri  : P2InstCZIDS<0b0010100, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpr $d, $s">;  
-    def CMPXrr  : P2InstCZIDS<0b0010001, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpx $d, $s">;
-    def CMPXri  : P2InstCZIDS<0b0010001, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpx $d, $s">;
+    let Uses = [SW] in def CMPXrr  : P2InstCZIDS<0b0010001, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpx $d, $s">;
+    let Uses = [SW] in def CMPXri  : P2InstCZIDS<0b0010001, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpx $d, $s">;
     
     def CMPSrr  : P2InstCZIDS<0b0010010, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmps $d, $s">;
     def CMPSri  : P2InstCZIDS<0b0010010, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmps $d, $s">;
-    def CMPSXrr : P2InstCZIDS<0b0010011, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpsx $d, $s">;
-    def CMPSXri : P2InstCZIDS<0b0010011, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpsx $d, $s">;
+    let Uses = [SW] in def CMPSXrr : P2InstCZIDS<0b0010011, 0b0, (outs P2Implicit:$cmp), (ins P2GPR:$d, P2GPR:$s), "cmpsx $d, $s">;
+    let Uses = [SW] in def CMPSXri : P2InstCZIDS<0b0010011, 0b1, (outs P2Implicit:$cmp), (ins P2GPR:$d, i32imm:$s), "cmpsx $d, $s">;
 }
 
 let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isBarrier = 1 in
@@ -470,9 +470,9 @@ defm WRBYTE     : P2InstLIDSm<0b11000100, "wrbyte">;
 defm WRWORD     : P2InstLIDSm<0b11000101, "wrword">;
 defm WRLONG     : P2InstLIDSm<0b11000110, "wrlong">;
 
-def RFBYTE      : P2InstCZD<0b1101011, 0b000010000, (outs P2GPR:$d), (ins), "rfbyte $d">;
-def RFWORD      : P2InstCZD<0b1101011, 0b000010001, (outs P2GPR:$d), (ins), "rfword $d">;
-def RFLONG      : P2InstCZD<0b1101011, 0b000010010, (outs P2GPR:$d), (ins), "rflong $d">;
+let mayLoad = 1, hasSideEffects = 1 in def RFBYTE      : P2InstCZD<0b1101011, 0b000010000, (outs P2GPR:$d), (ins), "rfbyte $d">;
+let mayLoad = 1, hasSideEffects = 1 in def RFWORD      : P2InstCZD<0b1101011, 0b000010001, (outs P2GPR:$d), (ins), "rfword $d">;
+let mayLoad = 1, hasSideEffects = 1 in def RFLONG      : P2InstCZD<0b1101011, 0b000010010, (outs P2GPR:$d), (ins), "rflong $d">;
 
 defm SETQ       : P2InstLDm<0b1101011, 0b000101000, "setq">;
 defm SETQ2      : P2InstLDm<0b1101011, 0b000101001, "setq2">;
@@ -483,13 +483,13 @@ defm WRLUT      : P2InstLIDSm<0b11000011, "wrlut">;
 defm RDFAST     : P2InstLIDSm<0b11000111, "rdfast">;
 defm WRFAST     : P2InstLIDSm<0b11001000, "wrfast">;
 
-// these have an output and no input, leave without multiclass for now
-def WFBYTEr     : P2InstLD<0b1101011, 0b000010101, 0b0, (outs P2GPR:$d), (ins), "wfbyte $d">;
-def WFBYTEi     : P2InstLD<0b1101011, 0b000010101, 0b1, (outs i32imm:$d), (ins), "wfbyte $d">;
-def WFWORDr     : P2InstLD<0b1101011, 0b000010110, 0b0, (outs P2GPR:$d), (ins), "wfword $d">;
-def WFWORDi     : P2InstLD<0b1101011, 0b000010110, 0b1, (outs i32imm:$d), (ins), "wfword $d">;
-def WFLONGr     : P2InstLD<0b1101011, 0b000010111, 0b0, (outs P2GPR:$d), (ins), "wflong $d">;
-def WFLONGi     : P2InstLD<0b1101011, 0b000010111, 0b1, (outs i32imm:$d), (ins), "wflong $d">;
+// FIFO writes consume D; they do not define a general-purpose register.
+let mayStore = 1, hasSideEffects = 1 in def WFBYTEr     : P2InstLD<0b1101011, 0b000010101, 0b0, (outs), (ins P2GPR:$d), "wfbyte $d">;
+let mayStore = 1, hasSideEffects = 1 in def WFBYTEi     : P2InstLD<0b1101011, 0b000010101, 0b1, (outs), (ins i32imm:$d), "wfbyte $d">;
+let mayStore = 1, hasSideEffects = 1 in def WFWORDr     : P2InstLD<0b1101011, 0b000010110, 0b0, (outs), (ins P2GPR:$d), "wfword $d">;
+let mayStore = 1, hasSideEffects = 1 in def WFWORDi     : P2InstLD<0b1101011, 0b000010110, 0b1, (outs), (ins i32imm:$d), "wfword $d">;
+let mayStore = 1, hasSideEffects = 1 in def WFLONGr     : P2InstLD<0b1101011, 0b000010111, 0b0, (outs), (ins P2GPR:$d), "wflong $d">;
+let mayStore = 1, hasSideEffects = 1 in def WFLONGi     : P2InstLD<0b1101011, 0b000010111, 0b1, (outs), (ins i32imm:$d), "wflong $d">;
 
 def RDDLONG     : Pseudo<(outs P2GPRPair:$reg), (ins P2GPR:$addr), "rddlong $reg, $addr">;
 def WRDLONG     : Pseudo<(outs), (ins P2GPRPair:$reg, P2GPR:$addr), "wrdlong $reg, $addr">;
@@ -557,16 +557,16 @@ let hasSideEffects = 1 in {
 
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
     def RET     : P2InstCZ<0b11010111, 0b000000000, 0b000101101, (outs), (ins), "ret">;
-    def RETA    : P2InstCZ<0b11010111, 0b000000000, 0b000101110, (outs), (ins), "reta">; // primarily use this for returns
-    def RETB    : P2InstCZ<0b11010111, 0b000000000, 0b000101111, (outs), (ins), "retb">;
+    let Defs = [PTRA], Uses = [PTRA], mayLoad = 1 in def RETA    : P2InstCZ<0b11010111, 0b000000000, 0b000101110, (outs), (ins), "reta">; // primarily use this for returns
+    let Defs = [PTRB], Uses = [PTRB], mayLoad = 1 in def RETB    : P2InstCZ<0b11010111, 0b000000000, 0b000101111, (outs), (ins), "retb">;
 }
 
-let isCall = 1, Uses = [PTRA], DecoderMethod = "DecodeCallInstruction" in {
+let isCall = 1, Defs = [SW], DecoderMethod = "DecodeCallInstruction" in {
     def CALL    : P2InstRA<0b1101101, 0b1, (outs), (ins relcalltarget:$a), "call $a">; // use this for relative function calls in cog mode.
     def CALLa   : P2InstRA<0b1101101, 0b0, (outs), (ins abscalltarget:$a), "call $a">; // use this for absolute function calls in cog mode.
-    def CALLAa   : P2InstRA<0b1101110, 0b0, (outs), (ins abscalltarget:$a), "calla $a">; // mainly use this for direct function calls
+    let Defs = [SW, PTRA], Uses = [PTRA] in def CALLAa   : P2InstRA<0b1101110, 0b0, (outs), (ins abscalltarget:$a), "calla $a">; // mainly use this for direct function calls
     def CALLr    : P2InstCZD<0b1101011, 0b000101101, (outs), (ins P2GPR:$d), "call $d">;
-    def CALLAr   : P2InstCZD<0b1101011, 0b000101110, (outs), (ins P2GPR:$d), "calla $d">; // mainly use this for function calls with register input
+    let Defs = [SW, PTRA], Uses = [PTRA] in def CALLAr   : P2InstCZD<0b1101011, 0b000101110, (outs), (ins P2GPR:$d), "calla $d">; // mainly use this for function calls with register input
 }
 
 let Defs = [PTRA], Uses = [PTRA] in {

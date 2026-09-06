@@ -131,6 +131,10 @@ namespace {
             }
 
 
+            for (auto &MBB : MF)
+                for (auto &MI : MBB)
+                    changed |= TII->annotateFlagState(MI);
+
             LLVM_DEBUG(errs() << "new MF:\n");
             LLVM_DEBUG(MF.dump());
 

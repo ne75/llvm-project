@@ -145,6 +145,13 @@ bool P2ExpandPseudos::runOnMachineFunction(MachineFunction &MF) {
         }
     }
 
+    for (auto &MBB : MF) {
+        if (!MBB.isLiveIn(P2::SW))
+            MBB.addLiveIn(P2::SW);
+        for (auto &MI : MBB)
+            Changed |= TII->annotateFlagState(MI);
+    }
+
     LLVM_DEBUG(errs()<<"done with pseudo expansion\n");
 
     return Changed;

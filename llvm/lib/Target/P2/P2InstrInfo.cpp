@@ -645,63 +645,70 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
 }
 
 bool P2InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+    auto *MBB = MI.getParent();
+    auto *Before = MI.getPrevNode();
+    auto End = std::next(MI.getIterator());
     switch(MI.getOpcode()) {
         case P2::ADD64ri:
         case P2::ADD64rr:
             expand_ADD64(MI);
-            return true;
+            break;
         
         case P2::SUB64ri:
         case P2::SUB64rr: 
             expand_SUB64(MI);
-            return true;
+            break;
 
         case P2::AND64ri:
         case P2::AND64rr:
             expand_AND64(MI);
-            return true;
+            break;
 
         case P2::OR64ri:
         case P2::OR64rr:
             expand_OR64(MI);
-            return true;
+            break;
 
         case P2::XOR64ri:
         case P2::XOR64rr:
             expand_XOR64(MI);
-            return true;
+            break;
 
         case P2::RDDLONG:
             expand_RDDLONG(MI);
-            return true;
+            break;
 
         case P2::WRDLONG:
             expand_WRDLONG(MI);
-            return true;
+            break;
 
         case P2::MOVi64:
             expand_MOVi64(MI);
-            return true;
+            break;
 
         case P2::SEXT64:
             expand_SEXT64(MI);
-            return true;
+            break;
 
         case P2::SEXTIR64:
             expand_SEXTIR64(MI);
-            return true;
+            break;
 
         case P2::ZEXT64:
             expand_ZEXT64(MI);
-            return true;
+            break;
 
         case P2::SELECTCC:
         case P2::SELECTCC64:
             expand_SELECTCC(MI);
-            return true;
-    } 
-
-    return false;
+            break;
+        default:
+            return false;
+    }
+    auto Begin = Before ? std::next(Before->getIterator()) : MBB->begin();
+    for (auto I = Begin; I != End; ++I)
+        annotateFlagState(*I);
+    return true;
 }
 
 unsigned P2InstrInfo::insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB, MachineBasicBlock *FBB,
@@ -715,4 +722,38 @@ unsigned P2InstrInfo::insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TB
         .addImm(1)  // implicit condition that reads the status word, don't care about the value for unconditional jumps
         .addImm(P2::ALWAYS);    // the actual condition 
     return 1;
+}
+
+// C/Z effects are immediate operands, so descriptor-wide Defs would falsely
+// clobber flags on instructions without WC/WZ. Materialize their real effects
+// before scheduling and again after late pseudo/branch expansion.
+bool P2InstrInfo::annotateFlagState(MachineInstr &MI) const {
+    if (MI.isPseudo() || MI.isInlineAsm() || MI.isDebugInstr())
+        return false;
+    unsigned Effect = 0;
+    switch (P2::getInstructionForm(MI)) {
+    case P2::P2InstCZIDS: case P2::P2InstZIDS: case P2::P2InstCIDS:
+    case P2::P2InstCLIDS: case P2::P2InstCLD: case P2::P2InstCZD:
+    case P2::P2InstCZ: case P2::P2InstCZLD:
+        Effect = MI.getOperand(MI.getDesc().getNumOperands() - 1).getImm();
+        break;
+    }
+    unsigned Cond = P2::getCondition(MI);
+    // A partial flag write preserves the other flag. Predicated writes also
+    // preserve both flags when their condition fails.
+    bool Uses = (Cond != P2::ALWAYS && Cond != 0) || (Effect && Effect != 3);
+    switch (MI.getOpcode()) {
+    case P2::WRC: case P2::WRNC: case P2::WRZ: case P2::WRNZ:
+        Uses = true; break;
+    }
+    bool Changed = false;
+    if (Uses && !MI.readsRegister(P2::SW)) {
+        MI.addOperand(MachineOperand::CreateReg(P2::SW, false, true));
+        Changed = true;
+    }
+    if (Effect && !MI.modifiesRegister(P2::SW)) {
+        MI.addOperand(MachineOperand::CreateReg(P2::SW, true, true));
+        Changed = true;
+    }
+    return Changed;
 }

@@ -1,3 +1,8 @@
+; RUN: llc -march=p2 -verify-machineinstrs -stop-after=postrapseudos < %s | FileCheck %s --check-prefix=STATE
+; STATE-DAG: QDIVrr {{.*}}implicit-def $qx, implicit-def $qy
+; STATE-DAG: CALLAa {{.*}}implicit-def {{(dead )?}}$sw, implicit-def $ptra, implicit $ptra
+; STATE-DAG: ADDrr {{.*}}implicit-def $sw
+; STATE-DAG: ADDXrr {{.*}}implicit $sw
 ; RUN: llc -march=p2 -verify-machineinstrs < %s -o %t.s
 ; RUN: llc -march=p2 -O0 -verify-machineinstrs -stop-after=finalize-isel < %s -o %t.mir
 ; Frame fixed objects must also be printable by MIRPrinter.
@@ -22,5 +27,9 @@ define i32 @call(i32 %x) {
 define i64 @memory(i64* %p, i64 %x) {
   store volatile i64 %x, i64* %p, align 4
   %r = load volatile i64, i64* %p, align 4
+  ret i64 %r
+}
+define i64 @extended_sum(i64 %a, i64 %b) {
+  %r = add i64 %a, %b
   ret i64 %r
 }

@@ -65,6 +65,7 @@ BitVector P2RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
     Reserved.set(P2::INA);
     Reserved.set(P2::INB);
 
+    Reserved.set(P2::SW);
     Reserved.set(P2::QX);
     Reserved.set(P2::QY);
 

@@ -64,6 +64,8 @@ namespace llvm {
         void adjustStackPtr(unsigned SP, int64_t Amount, MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator I) const;
 
+        bool annotateFlagState(MachineInstr &MI) const;
+
         bool expandPostRAPseudo(MachineInstr &MI) const override;
 
         unsigned insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB, MachineBasicBlock *FBB, 
