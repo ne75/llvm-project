@@ -9,21 +9,24 @@ define i8* @alloca8() {
 
 define i16* @alloca16() {
 ; CHECK-LABEL: alloca16:
-; CHECK: add ptra, #2
+; CHECK: add ptra, #4
+; CHECK: andn r31, #1
     %ptr = alloca i16
     ret i16* %ptr
 }
 
 define i32* @alloca32() {
 ; CHECK-LABEL: alloca32:
-; CHECK: add ptra, #4
+; CHECK: add ptra, #8
+; CHECK: andn r31, #3
     %ptr = alloca i32
     ret i32* %ptr
 }
 
 define i64* @alloca64() {
 ; CHECK-LABEL: alloca64:
-; CHECK: add ptra, #8
+; CHECK: add ptra, #12
+; CHECK: andn r31, #3
     %ptr = alloca i64
     ret i64* %ptr
 }
@@ -37,21 +40,24 @@ define i8* @alloca8_2() {
 
 define i16* @alloca16_2() {
 ; CHECK-LABEL: alloca16_2:
-; CHECK: add ptra, #4
+; CHECK: add ptra, #6
+; CHECK: andn r31, #1
     %ptr = alloca i16, i16 2
     ret i16* %ptr
 }
 
 define i32* @alloca32_2() {
 ; CHECK-LABEL: alloca32_2:
-; CHECK: add ptra, #8
+; CHECK: add ptra, #12
+; CHECK: andn r31, #3
     %ptr = alloca i32, i32 2
     ret i32* %ptr
 }
 
 define i64* @alloca64_2() {
 ; CHECK-LABEL: alloca64_2:
-; CHECK: add ptra, #16
+; CHECK: add ptra, #20
+; CHECK: andn r31, #3
     %ptr = alloca i64, i64 2
     ret i64* %ptr
 }

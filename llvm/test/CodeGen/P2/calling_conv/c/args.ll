@@ -19,7 +19,8 @@ define void @void_i16(i16 %a) {
 
 define void @void_i32(i32 %a) {
 ; CHECK-LABEL:  void_i32:
-; CHECK:        wrlong r0, ptra[-1]
+; CHECK:        andn pa, #3
+; CHECK-NEXT:   wrlong r0, pa
     %ptr = alloca i32
     store i32 %a, i32* %ptr
     ret void
@@ -37,11 +38,12 @@ define void @void_i64(i64 %a) {
 ; register based arguments
 define void @void_i32_i32_i32_i32(i32 %a, i32 %b, i32 %c, i32 %d) {
 ; CHECK-LABEL:  void_i32_i32_i32_i32:
-; CHECK:        add ptra, #16
+; CHECK:        add ptra, #20
 ; CHECK:        wrlong r3, r5
 ; CHECK:        wrlong r2, r3
 ; CHECK:        wrlong r1, r4
-; CHECK:        wrlong r0, ptra[-4]
+; CHECK:        andn pa, #3
+; CHECK-NEXT:   wrlong r0, pa
     %ptr = alloca i32, i32 4
     %ptr0 = getelementptr i32, i32* %ptr, i32 0
     %ptr1 = getelementptr i32, i32* %ptr, i32 1

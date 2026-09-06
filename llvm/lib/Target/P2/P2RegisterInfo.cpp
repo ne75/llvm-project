@@ -102,6 +102,7 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
     int64_t fi_offset = MFI.getObjectOffset(frame_idx); // offset from the start of the frame (low address)
     // int local_frame_size = MF.getFrameInfo().getLocalFrameSize();
     int64_t offset = stack_size-fi_offset;
+    Align ObjectAlign = MF.getInfo<P2FunctionInfo>()->getObjectAlignment(frame_idx);
 
     LLVM_DEBUG(errs() << "frame_idx : " << frame_idx << "\n"
                         << "stack size  : " << stack_size << "\n"
@@ -114,9 +115,9 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
 
     // if we have rr/ir read or writes, those can be changed to ri/ii and use offsets below. FrameIndex is always using 
     // PTRA, so it's safe to do that, as the last instruction can never be a register. 
-    if (MI.getOpcode() == P2::WRLONGrr) MI.setDesc(inst_info.get(P2::WRLONGri));
-    if (MI.getOpcode() == P2::WRLONGir) MI.setDesc(inst_info.get(P2::WRLONGii));
-    if (MI.getOpcode() == P2::RDLONGrr) MI.setDesc(inst_info.get(P2::RDLONGri));
+    if (ObjectAlign == Align(1) && MI.getOpcode() == P2::WRLONGrr) MI.setDesc(inst_info.get(P2::WRLONGri));
+    if (ObjectAlign == Align(1) && MI.getOpcode() == P2::WRLONGir) MI.setDesc(inst_info.get(P2::WRLONGii));
+    if (ObjectAlign == Align(1) && MI.getOpcode() == P2::RDLONGrr) MI.setDesc(inst_info.get(P2::RDLONGri));
 
     // if the op code using the frame index is rdlong or wrlong, we can use a special immediate to read/write PTRA
     // bool can_use_ptr_off = (op == P2::WRLONGri) || (op == P2::RDLONGri);
@@ -133,9 +134,13 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
 
         BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::SUBri), dst_reg)
                                 .addReg(dst_reg, RegState::Kill)
-                                .addImm(offset)
+                                .addImm(offset - (ObjectAlign.value() - 1))
                                 .addImm(P2::ALWAYS)
                                 .addImm(P2::NOEFF);
+        if (ObjectAlign > Align(1))
+            BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::ANDNri), dst_reg)
+                .addReg(dst_reg).addImm(ObjectAlign.value() - 1)
+                .addImm(P2::ALWAYS).addImm(P2::NOEFF);
     } else if ((op == P2::WRLONGri) || (op == P2::RDLONGri) || (op == P2::WRLONGii)) {
         int imm = 0;
         offset *= -1;
@@ -183,9 +188,14 @@ void P2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II, int SPA
 
         BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::SUBri), reg)
                                 .addReg(reg, RegState::Kill)
-                                .addImm(offset)
+                                .addImm(offset - (ObjectAlign.value() - 1))
                                 .addImm(P2::ALWAYS)
                                 .addImm(P2::NOEFF); // adjust saved SP by frame index offset
+
+        if (ObjectAlign > Align(1))
+            BuildMI(*MI.getParent(), II, dl, inst_info.get(P2::ANDNri), reg)
+                .addReg(reg).addImm(ObjectAlign.value() - 1)
+                .addImm(P2::ALWAYS).addImm(P2::NOEFF);
 
         MI.getOperand(FIOperandNum).ChangeToRegister(reg, false);
 

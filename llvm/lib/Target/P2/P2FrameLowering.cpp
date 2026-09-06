@@ -33,6 +33,25 @@
 
 using namespace llvm;
 
+void P2FrameLowering::processFunctionBeforeFrameFinalized(
+    MachineFunction &MF, RegScavenger *RS) const {
+    auto &MFI = MF.getFrameInfo();
+    auto *Info = MF.getInfo<P2FunctionInfo>();
+    // PTRA is only byte aligned at ABI boundaries. Give each local/spill slot
+    // enough slack to align its address independently, without moving incoming
+    // arguments or changing the caller's stack pointer on return.
+    for (int FI = 0; FI < MFI.getObjectIndexEnd(); ++FI) {
+        if (MFI.isDeadObjectIndex(FI) || MFI.isVariableSizedObjectIndex(FI))
+            continue;
+        Align A = MFI.getObjectAlign(FI);
+        if (A == Align(1))
+            continue;
+        Info->setObjectAlignment(FI, A);
+        MFI.setObjectSize(FI, MFI.getObjectSize(FI) + A.value() - 1);
+        MFI.setObjectAlignment(FI, Align(1));
+    }
+}
+
 void P2FrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const {
     LLVM_DEBUG(dbgs() << "Emit Prologue: " << MF.getName() << "\n");
 

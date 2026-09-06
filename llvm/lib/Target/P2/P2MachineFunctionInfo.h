@@ -55,6 +55,9 @@ class P2FunctionInfo : public MachineFunctionInfo {
     /// this function is intended to be loaded directly into a cog
     bool cogex;
 
+    // Local slots include alignment slack; incoming argument offsets stay ABI-defined.
+    std::map<int, Align> ObjectAlignments;
+
 public:
     P2FunctionInfo(MachineFunction &MF)
         : MF(MF),
@@ -97,6 +100,11 @@ public:
     }
 
     unsigned getIncomingArgSize() const { return IncomingArgSize; }
+    void setObjectAlignment(int FI, Align A) { ObjectAlignments.insert({FI, A}); }
+    Align getObjectAlignment(int FI) const {
+        auto I = ObjectAlignments.find(FI);
+        return I == ObjectAlignments.end() ? Align(1) : I->second;
+    }
 };
 
 } // end of namespace llvm

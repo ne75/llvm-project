@@ -13,9 +13,10 @@ define i8 @load8() {
 
 define i16 @load16() {
 ; CHECK-LABEL:  load16:
-; CHECK:        add ptra, #2
+; CHECK:        add ptra, #4
 ; CHECK-NEXT:   mov pa, ptra	
-; CHECK-NEXT:   sub pa, #2
+; CHECK-NEXT:   sub pa, #3
+; CHECK-NEXT:   andn pa, #1
 ; CHECK-NEXT:   rdword r31, pa
     %ptr = alloca i16
     %val = load i16, i16* %ptr
@@ -24,8 +25,11 @@ define i16 @load16() {
 
 define i32 @load32() {
 ; CHECK-LABEL:  load32:
-; CHECK:        add ptra, #4
-; CHECK-NEXT:   rdlong r31, ptra[-1]
+; CHECK:        add ptra, #8
+; CHECK-NEXT:   mov pa, ptra
+; CHECK-NEXT:   sub pa, #5
+; CHECK-NEXT:   andn pa, #3
+; CHECK-NEXT:   rdlong r31, pa
     %ptr = alloca i32
     %val = load i32, i32* %ptr
     ret i32 %val
