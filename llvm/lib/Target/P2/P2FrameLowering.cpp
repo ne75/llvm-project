@@ -44,7 +44,7 @@ void P2FrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) 
     LLVM_DEBUG(errs() << "Frame Info:\n");
     LLVM_DEBUG(MFI.dump(MF));
 
-    if (MF.getFunction().hasFnAttribute(Attribute::Cogmain)) {
+    if (MF.getFunction().hasFnAttribute("cogmain")) {
         LLVM_DEBUG(errs() << "cog entry function, saving ptra[0] to r0\n");
         DebugLoc DL = MBB.findDebugLoc(MBBI);
         BuildMI(MBB, MBBI, DL, TII->get(P2::RDLONGrr))
@@ -107,7 +107,7 @@ void P2FrameLowering::determineCalleeSaves(MachineFunction &MF, BitVector &Saved
     LLVM_DEBUG(errs() << "=== Function: " << MF.getName() << " ===\n");
     LLVM_DEBUG(errs() << "Determining callee saves\n");
 
-    if (MF.getFunction().hasFnAttribute(Attribute::Cogmain)) {
+    if (MF.getFunction().hasFnAttribute("cogmain")) {
         return;
     }
 

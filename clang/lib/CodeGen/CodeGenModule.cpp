@@ -1873,13 +1873,13 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
     // we check for cogtext or cogmain attribute on functions
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
     if (FD->hasAttr<CogtextAttr>()) {
-      B.addAttribute(llvm::Attribute::Cogtext);
+      B.addAttribute("cogtext");
     }
     if (FD->hasAttr<CogmainAttr>()) {
-      B.addAttribute(llvm::Attribute::Cogmain);
+      B.addAttribute("cogmain");
     }
     if (FD->hasAttr<CogcacheAttr>()) {
-      B.addAttribute(llvm::Attribute::Cogcache);
+      B.addAttribute("cogcache");
     }
   }
 
