@@ -87,12 +87,25 @@ bool P2AsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
             return true; // Unknown modifier.
 
         switch(ExtraCode[0]) {
+            case 'L':
+            case 'H': {
+                if (!MO.isReg())
+                    return true;
+                unsigned SubReg = MF->getSubtarget().getRegisterInfo()->getSubReg(
+                    MO.getReg(), ExtraCode[0] == 'L' ? P2::sub0 : P2::sub1);
+                if (!SubReg)
+                    return true; // Word modifiers require a register pair.
+                O << P2InstPrinter::getRegisterName(SubReg);
+                return false;
+            }
             case '#':
                 // this is an immediate
             if ((MO.getType()) != MachineOperand::MO_Immediate)
                 return true;
             O << "#" << MO.getImm();
                 return false;
+            default:
+                return true;
         }
     }
 

@@ -895,8 +895,18 @@ std::pair<unsigned, const TargetRegisterClass *> P2TargetLowering::getRegForInli
             case 'r':
                 if (VT == MVT::i32)
                     return std::make_pair(0U, &P2::P2GPRRegClass);
+                if (VT == MVT::i64)
+                    return std::make_pair(0U, &P2::P2GPRPairRegClass);
         }
     }
 
-    return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+    auto Reg = TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+    // A single fixed register cannot hold an i64. Silently coercing this to
+    // i32 used to discard the high half of outputs such as "{r30}".
+    if (VT == MVT::i64 && Reg.first &&
+        !P2::P2GPRPairRegClass.contains(Reg.first))
+        return std::make_pair(0U, nullptr);
+    if (VT == MVT::i32 && P2::P2GPRPairRegClass.contains(Reg.first))
+        return std::make_pair(0U, nullptr);
+    return Reg;
 }

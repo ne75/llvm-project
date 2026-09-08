@@ -29,7 +29,10 @@ const char *const P2TargetInfo::GCCRegNames[] = {
     "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
     "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
     "ijmp3", "iret3", "ijmp2", "iret2", "ijmp1", "iret1", "pa", "pb",
-    "ptra", "ptrb", "dira", "dirb", "outa", "outb", "ina", "inb"
+    "ptra", "ptrb", "dira", "dirb", "outa", "outb", "ina", "inb",
+    "r0_r1", "r2_r3", "r4_r5", "r6_r7", "r8_r9", "r10_r11",
+    "r12_r13", "r14_r15", "r16_r17", "r18_r19", "r20_r21",
+    "r22_r23", "r24_r25", "r26_r27", "r28_r29", "r30_r31"
 };
 
 ArrayRef<const char *> P2TargetInfo::getGCCRegNames() const {
