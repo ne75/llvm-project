@@ -90,3 +90,12 @@ define i32 @select_slt64_imm(i64 %a, i32 %t, i32 %f) {
   %r = select i1 %c, i32 %t, i32 %f
   ret i32 %r
 }
+
+; The compared RHS is also a selected value (the lwIP packet-copy pattern).
+define i32 @select_umin32(i32 %a, i32 %b) {
+; CHECK-LABEL: select_umin32:
+; CHECK: cmp {{r[0-9]+}}, {{r[0-9]+}} wcz
+  %c = icmp ugt i32 %a, %b
+  %r = select i1 %c, i32 %b, i32 %a
+  ret i32 %r
+}

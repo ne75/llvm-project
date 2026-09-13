@@ -1,0 +1,31 @@
+# RUN: llc -march=p2 -run-pass=postrapseudos -verify-machineinstrs %s -o - | FileCheck %s
+# The root select-compare hardware suite executes the corresponding unsigned minimum.
+# Kill flags belong to the original pseudo as a whole, not to its early reads.
+---
+name: select_reuses_rhs
+tracksRegLiveness: true
+# CHECK-LABEL: name: select_reuses_rhs
+# CHECK: $sw = CMPrr $r0, $r1, 15, 3
+# CHECK-NEXT: $r2 = MOVrr $r1, 1, 0, implicit $sw
+# CHECK-NEXT: $r2 = MOVrr $r0, 14, 0, implicit $sw
+body: |
+  bb.0:
+    liveins: $r0, $r1, $ptra
+    $r2 = SELECTCC $r0, killed $r1, $r1, $r0, 4
+    $r31 = MOVrr $r2, 15, 0
+    RETA 15, 0, implicit $ptra, implicit-def $ptra, implicit $r31
+...
+---
+name: select_reuses_value
+tracksRegLiveness: true
+# CHECK-LABEL: name: select_reuses_value
+# CHECK: $sw = CMPrr $r0, $r1, 15, 3
+# CHECK-NEXT: $r2 = MOVrr $r3, 1, 0, implicit $sw
+# CHECK-NEXT: $r2 = MOVrr $r3, 14, 0, implicit $sw
+body: |
+  bb.0:
+    liveins: $r0, $r1, $r3, $ptra
+    $r2 = SELECTCC $r0, $r1, killed $r3, $r3, 4
+    $r31 = MOVrr $r2, 15, 0
+    RETA 15, 0, implicit $ptra, implicit-def $ptra, implicit $r31
+...

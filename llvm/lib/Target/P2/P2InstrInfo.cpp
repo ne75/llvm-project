@@ -495,10 +495,17 @@ void P2InstrInfo::expand_SELECTCC(MachineInstr &MI) const {
 
     const MachineOperand &d = MI.getOperand(0);     // always a register
     const MachineOperand &lhs = MI.getOperand(1);   // always a register
-    const MachineOperand &rhs = MI.getOperand(2);   // register or immediate
-    const MachineOperand &t = MI.getOperand(3);     // register or immediate
-    const MachineOperand &f = MI.getOperand(4);     // register or immediate
+    MachineOperand rhs = MI.getOperand(2);   // register or immediate
+    MachineOperand t = MI.getOperand(3);     // register or immediate
+    MachineOperand f = MI.getOperand(4);     // register or immediate
     int cc = MI.getOperand(5).getImm();             // condition code
+
+    // Kill flags describe the end of the whole pseudo, not an early compare
+    // or move. A register may appear in both the comparison and a selected
+    // value, or in both values. Keep these copied sources live during expansion.
+    for (MachineOperand *Op : {&rhs, &t, &f})
+        if (Op->isReg())
+            Op->setIsKill(false);
     const bool Is32Bit = RI.getRegClass(P2::P2GPRRegClassID)->contains(lhs.getReg());
 
     unsigned movt_op = P2::MOVrr;
