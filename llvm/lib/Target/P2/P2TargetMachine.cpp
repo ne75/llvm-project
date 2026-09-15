@@ -13,7 +13,7 @@
 
 #include "P2TargetMachine.h"
 #include "P2.h"
-#include "P2TargetObjectFile.h"
+#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "P2ISelDAGToDAG.h"
 #include "TargetInfo/P2TargetInfo.h"
 
@@ -37,7 +37,7 @@ P2TargetMachine::P2TargetMachine(const Target &T, const Triple &TT, StringRef CP
                                      Optional<Reloc::Model> RM,
                                      Optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT) :
                         LLVMTargetMachine(T, "e-p:32:32-i32:32-i64:32", TT, CPU, FS, Options, Reloc::Static, CodeModel::Small, OL),
-                        TLOF(std::make_unique<P2TargetObjectFile>()),
+                        TLOF(std::make_unique<TargetLoweringObjectFileELF>()),
                         subtarget(TT, std::string(CPU), std::string(FS), *this) {
     initAsmInfo();
 }

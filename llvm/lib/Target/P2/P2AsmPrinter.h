@@ -14,7 +14,6 @@
 #ifndef LLVM_LIB_TARGET_P2_P2ASMPRINTER_H
 #define LLVM_LIB_TARGET_P2_P2ASMPRINTER_H
 
-#include "P2MachineFunctionInfo.h"
 #include "MCTargetDesc/P2MCInstLower.h"
 
 #include "P2TargetMachine.h"
@@ -34,7 +33,6 @@ namespace llvm {
     class LLVM_LIBRARY_VISIBILITY P2AsmPrinter : public AsmPrinter {
 
     public:
-        const P2FunctionInfo *P2FI;
         P2MCInstLower MCInstLowering;
 
         explicit P2AsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
@@ -44,7 +42,6 @@ namespace llvm {
             return "P2 Assembly Printer";
         }
 
-        virtual bool runOnMachineFunction(MachineFunction &MF) override;
         
         void printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostream &O);
         bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNum, const char *ExtraCode, raw_ostream &O) override;
@@ -54,8 +51,6 @@ namespace llvm {
 
         void emitFunctionEntryLabel() override;
         void emitFunctionBodyStart() override;
-        void emitFunctionBodyEnd() override;
-        void emitStartOfAsmFile(Module &M) override;
     };
 }
 

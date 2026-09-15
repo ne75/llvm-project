@@ -17,7 +17,6 @@
 #include "MCTargetDesc/P2InstPrinter.h"
 #include "P2.h"
 #include "P2InstrInfo.h"
-#include "P2MachineFunctionInfo.h"
 #include "TargetInfo/P2TargetInfo.h"
 #include "MCTargetDesc/P2MCAsmInfo.h"
 #include "llvm/ADT/SmallString.h"
@@ -44,13 +43,6 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "p2-asm-printer"
-
-bool P2AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
-    LLVM_DEBUG(errs() << "asm printer run on machine function\n");
-    P2FI = MF.getInfo<P2FunctionInfo>();
-    AsmPrinter::runOnMachineFunction(MF);
-    return true;
-}
 
 void P2AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostream &O) {
     const MachineOperand &MO = MI->getOperand(OpNo);
@@ -158,8 +150,6 @@ void P2AsmPrinter::emitFunctionBodyStart() {
     MCInstLowering.Initialize(&MF->getContext());
 }
 
-void P2AsmPrinter::emitFunctionBodyEnd() {}
-void P2AsmPrinter::emitStartOfAsmFile(Module &M) {}
 
 // Force static initialization.
 extern "C" void LLVMInitializeP2AsmPrinter() {

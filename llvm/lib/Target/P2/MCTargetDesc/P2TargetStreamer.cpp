@@ -13,7 +13,6 @@
 
 #include "P2InstPrinter.h"
 #include "P2MCTargetDesc.h"
-#include "P2TargetObjectFile.h"
 #include "P2TargetStreamer.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionELF.h"

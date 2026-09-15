@@ -17,18 +17,11 @@
 #include "MCTargetDesc/P2BaseInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/ADT/SmallSet.h"
 
 using namespace llvm;
 
 #define DEBUG_TYPE "p2-insert-aug"
-
-static cl::opt<bool> EnableDelJmp("enable-p2-insert-aug",
-    cl::init(true),
-    cl::desc("Insert augs/augd for large immediates"),
-    cl::Hidden);
 
 namespace {
     struct P2InsertAug : public MachineFunctionPass {

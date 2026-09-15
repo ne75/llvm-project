@@ -27,24 +27,13 @@ namespace llvm {
 class P2FunctionInfo : public MachineFunctionInfo {
     virtual void anchor();
 
-    MachineFunction& MF;
-
     /// SRetReturnReg - Some subtargets require that sret lowering includes
     /// returning the value of the returned struct in a register. This field
-    /// holds the virtual register into which the sret argumçent is passed.
+    /// holds the virtual register into which the sret argument is passed.
     unsigned SRetReturnReg;
-
-    /// index where call saves PC and status word
-    int call_ret_idx;
-
-    /// VarArgsFrameOffset - offset for start of varargs area.
-    int VarArgsFrameOffset;
 
     /// VarArgsFrameIndex - index for start of varargs area.
     int VarArgsFrameIndex;
-
-    /// True if function has a byval argument.
-    bool HasByvalArg;
 
     /// Size of incoming argument area.
     unsigned IncomingArgSize;
@@ -52,33 +41,15 @@ class P2FunctionInfo : public MachineFunctionInfo {
     /// Size of the callee-saved register portion of the stack frame in bytes.
     unsigned CalleeSavedFrameSize;
 
-    /// this function is intended to be loaded directly into a cog
-    bool cogex;
-
     // Local slots include alignment slack; incoming argument offsets stay ABI-defined.
     std::map<int, Align> ObjectAlignments;
 
 public:
-    P2FunctionInfo(MachineFunction &MF)
-        : MF(MF),
-        SRetReturnReg(0),
-        call_ret_idx(0),
-        VarArgsFrameOffset(0),
-        VarArgsFrameIndex(0),
-        HasByvalArg(false),
-        IncomingArgSize(0),
-        CalleeSavedFrameSize(0)
-        {
-            cogex = MF.getFunction().hasFnAttribute("cogmain") || MF.getFunction().hasFnAttribute("cogtext");
-        }
+    explicit P2FunctionInfo(MachineFunction &)
+        : SRetReturnReg(0), VarArgsFrameIndex(0), IncomingArgSize(0),
+          CalleeSavedFrameSize(0) {}
 
     ~P2FunctionInfo();
-
-    int getCallRetIdx() const { return call_ret_idx; }
-    void setCallRetIdx(int i) { call_ret_idx = i; }
-
-    int getVarArgsFrameOffset() const { return VarArgsFrameOffset; }
-    void setVarArgsFrameOffset(int off) { VarArgsFrameOffset = off; }
 
     int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
     void setVarArgsFrameIndex(int idx) { VarArgsFrameIndex = idx; }
@@ -86,18 +57,10 @@ public:
     unsigned getSRetReturnReg() const { return SRetReturnReg; }
     void setSRetReturnReg(unsigned Reg) { SRetReturnReg = Reg; }
 
-    bool hasByvalArg() const { return HasByvalArg; }
-    void setFormalArgInfo(unsigned Size, bool HasByval) {
-        IncomingArgSize = Size;
-        HasByvalArg = HasByval;
-    }
+    void setIncomingArgSize(unsigned Size) { IncomingArgSize = Size; }
 
     unsigned getCalleeSavedFrameSize() const { return CalleeSavedFrameSize; }
     void setCalleeSavedFrameSize(unsigned Bytes) { CalleeSavedFrameSize = Bytes; }
-
-    bool isCogex() {
-        return cogex;
-    }
 
     unsigned getIncomingArgSize() const { return IncomingArgSize; }
     void setObjectAlignment(int FI, Align A) { ObjectAlignments.insert({FI, A}); }

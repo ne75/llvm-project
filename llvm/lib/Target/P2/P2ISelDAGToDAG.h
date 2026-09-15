@@ -50,7 +50,6 @@ namespace llvm {
             return "P2 DAG->DAG Pattern Instruction Selection";
         }
 
-        bool runOnMachineFunction(MachineFunction &MF) override;
 
 
     };

@@ -22,7 +22,6 @@ namespace llvm {
     class P2TargetMachine;
     class FunctionPass;
 
-    FunctionPass *createP2CollapseSubregCopyPass(P2TargetMachine &tm);
     FunctionPass *createP2ExpandPseudosPass(P2TargetMachine &tm);
     FunctionPass *createP2DelJmp0Pass(P2TargetMachine &TM);
     FunctionPass *createP2InsertAugPass(P2TargetMachine &TM);

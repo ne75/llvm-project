@@ -15,7 +15,6 @@
 
 #include "P2MachineFunctionInfo.h"
 #include "P2TargetMachine.h"
-#include "P2TargetObjectFile.h"
 #include "MCTargetDesc/P2BaseInfo.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -355,7 +354,6 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     MachineFunction &MF = DAG.getMachineFunction();
     const TargetFrameLowering *TFL = MF.getSubtarget().getFrameLowering();
-    P2FunctionInfo *P2FI = MF.getInfo<P2FunctionInfo>();
 
     LLVM_DEBUG(errs() << "=== Lower Call\n");
 
@@ -450,7 +448,6 @@ SDValue P2TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
             }
 
             // save how many bytes of the call will allocated
-            // P2FI->setCallArgFrameSize(P2FI->getCallArgFrameSize() + arg_size);
 
             if (Flags.isByVal()) {
                 LLVM_DEBUG(errs() << "Argument is byval of size " << Flags.getByValSize() << "\n");
@@ -592,16 +589,15 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
     int stack_size = CCInfo.getNextStackOffset();
     LLVM_DEBUG(errs() << " - next stack offset: " << stack_size << "\n");
 
-    int fi = MFI->CreateFixedObject(4, stack_size, true); // frame index for where CALL saved the PC
+    MFI->CreateFixedObject(4, stack_size, true); // frame index for where CALL saved the PC
     // Fixed incoming objects are already allocated by the caller. They must
     // not enter the nonnegative local-frame-object map (used by MIR and PEI).
-    P2FI->setCallRetIdx(fi);
 
     // this will hold the memory offset of the last argument for use by var args, if needed
     int last_formal_arg_offset = 0;
 
     // save arg info for future use
-    P2FI->setFormalArgInfo(CCInfo.getNextStackOffset(), CCInfo.getInRegsParamsCount() > 0);
+    P2FI->setIncomingArgSize(CCInfo.getNextStackOffset());
     //const Function &Func = DAG.getMachineFunction().getFunction();
 
     CCInfo.rewindByValRegsInfo();
@@ -675,7 +671,7 @@ SDValue P2TargetLowering::LowerFormalArguments(SDValue Chain,
                 LLVM_DEBUG(errs() << " - location offset: " << VA.getLocMemOffset() << "\n");
 
                 // Create the frame index object for this incoming parameter
-                fi = MFI->CreateFixedObject(obj_size, last_formal_arg_offset, true);
+                int fi = MFI->CreateFixedObject(obj_size, last_formal_arg_offset, true);
 
                 LLVM_DEBUG(errs() << " - Loading argument from index " << fi << "\n");
 

@@ -8323,15 +8323,6 @@ class P2TargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   P2TargetCodeGenInfo(CodeGenTypes &CGT)
       : TargetCodeGenInfo(std::make_unique<P2ABIInfo>(CGT)) {}
-
-  void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
-                           CodeGen::CodeGenModule &CGM) const override {
-    if (GV->isDeclaration())
-      return;
-    const auto *FD = dyn_cast_or_null<FunctionDecl>(D);
-    if (!FD) return;
-    auto *Fn = cast<llvm::Function>(GV);
-  }
 };
 }
 

@@ -38,10 +38,6 @@ using namespace llvm;
 
 #define DEBUG_TYPE "p2-isel"
 
-bool P2DAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
-    return SelectionDAGISel::runOnMachineFunction(MF);
-}
-
 void P2DAGToDAGISel::selectMultiplication(SDNode *N) {
     SDLoc DL(N);
     MVT vt = N->getSimpleValueType(0);

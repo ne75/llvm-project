@@ -6,9 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This pass expands pseudo instructions into real propeller instrucitons
-// The only two instructions here can probably be moved to P2InstrInfo
-// and this pass be removed.
+// Expand QDIV pseudos before register allocation, protect reserved HUB
+// address encodings and annotate instruction flag state before scheduling.
 // 
 //===----------------------------------------------------------------------===//
 
@@ -44,8 +43,6 @@ namespace {
 
         void expand_QUDIV(MachineFunction &MF, MachineBasicBlock::iterator SII);
         void expand_QUREM(MachineFunction &MF, MachineBasicBlock::iterator SII);
-        void expand_SELECTCC(MachineFunction &MF, MachineBasicBlock::iterator SII);
-        void expand_MOVi64(MachineFunction &MF, MachineBasicBlock::iterator SII);
     };
 
     char P2ExpandPseudos::ID = 0;
