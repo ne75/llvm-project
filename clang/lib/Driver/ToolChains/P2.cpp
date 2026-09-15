@@ -11,15 +11,8 @@
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
-#include "llvm/ADT/Optional.h"
-#include "llvm/ADT/StringSwitch.h"
-#include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Option/ArgList.h"
-#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
-
-#include <iostream>
 
 using namespace clang::driver;
 using namespace clang::driver::toolchains;
@@ -28,37 +21,12 @@ using namespace clang;
 using namespace llvm::opt;
 
 
-const StringRef PossibleP2LibCLocations[] = {
-    "/opt/p2llvm/libc",
-    "/opt/p2/libc",
-};
-
-const StringRef PossibleP2LibP2Locations[] = {
-    "/opt/p2llvm/libp2",
-    "/opt/p2/libp2",
-};
-
-/// P2 Toolchain
+/// Headers, libraries and linker scripts must come from the same SDK.
 P2ToolChain::P2ToolChain(const Driver &D, const llvm::Triple &Triple,
-                        const ArgList &Args) : Generic_ELF(D, Triple, Args) {
-
-    std::string libc_dir;
-    std::string libp2_dir;
-
-    for (StringRef PossiblePath : PossibleP2LibCLocations) {
-    // Return the first p2 libc installation that exists.
-        if (llvm::sys::fs::is_directory(PossiblePath))
-            libc_dir = std::string(PossiblePath);
-    }
-
-    for (StringRef PossiblePath : PossibleP2LibP2Locations) {
-    // Return the first p2 libc installation that exists.
-        if (llvm::sys::fs::is_directory(PossiblePath))
-            libp2_dir = std::string(PossiblePath);
-    }
-
-    getFilePaths().push_back(libc_dir + std::string("/lib/"));
-    getFilePaths().push_back(libp2_dir + std::string("/lib/"));
+                       const ArgList &Args) : Generic_ELF(D, Triple, Args) {
+    const std::string SysRoot = computeSysRoot();
+    getFilePaths().push_back(SysRoot + "/libc/lib");
+    getFilePaths().push_back(SysRoot + "/libp2/lib");
 }
 
 void P2ToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
@@ -84,10 +52,7 @@ std::string P2ToolChain::computeSysRoot() const {
         return getDriver().SysRoot;
 
     SmallString<128> Dir;
-    if (GCCInstallation.isValid())
-        llvm::sys::path::append(Dir, GCCInstallation.getParentLibPath(), "..");
-    else
-        llvm::sys::path::append(Dir, getDriver().Dir, "..");
+    llvm::sys::path::append(Dir, getDriver().Dir, "..");
 
     return std::string(Dir.str());
 }
@@ -112,19 +77,42 @@ void P2::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     Args.AddAllArgs(CmdArgs, options::OPT_L);
     getToolChain().AddFilePathLibArgs(Args, CmdArgs);
 
-    CmdArgs.push_back("--whole-archive");
-    CmdArgs.push_back("-lc");
-    CmdArgs.push_back("-lp2");
-
-    if (Args.hasArg(options::OPT_mp2db)) {
-        CmdArgs.push_back("-lp2db");
-        CmdArgs.push_back("-Tp2_debug.ld");
-    } else {
-        CmdArgs.push_back("-Tp2.ld");
+    Args.AddAllArgs(CmdArgs, options::OPT_r, options::OPT_T);
+    const bool Relocatable = Args.hasArg(options::OPT_r);
+    const bool NoStdLib = Args.hasArg(options::OPT_nostdlib);
+    const bool DefaultLibs = !Relocatable && !NoStdLib &&
+                            !Args.hasArg(options::OPT_nodefaultlibs);
+    if (DefaultLibs) {
+        // Startup and the shared LUT image are members of these archives.
+        // They cannot yet be selected independently with -nostartfiles.
+        if (const Arg *A = Args.getLastArg(options::OPT_nostartfiles)) {
+            getToolChain().getDriver().Diag(diag::err_drv_unsupported_opt_for_target)
+                << A->getAsString(Args) << getToolChain().getTripleString();
+            return;
+        }
+        CmdArgs.push_back("--whole-archive");
+        CmdArgs.push_back("-lc");
+        CmdArgs.push_back("-lp2");
+        if (Args.hasArg(options::OPT_mp2db))
+            CmdArgs.push_back("-lp2db");
+        CmdArgs.push_back("--no-whole-archive");
     }
-    std::string sys_root = getToolChain().computeSysRoot();
 
-    CmdArgs.push_back(Args.MakeArgString("-L" + sys_root));
+    // Include scripts passed through -Wl, or -Xlinker as well as driver -T.
+    // -Ttext/-Tdata/-Tbss set addresses; they do not replace the layout script.
+    bool HasScript = false;
+    for (StringRef A : CmdArgs) {
+        if (A == "--script" || A.startswith("--script=") ||
+            (A.startswith("-T") && !A.startswith("-Ttext") &&
+             !A.startswith("-Tdata") && !A.startswith("-Tbss")))
+            HasScript = true;
+    }
+    if (!Relocatable && !NoStdLib && !HasScript) {
+        const char *Script = Args.hasArg(options::OPT_mp2db) ?
+                             "/p2_debug.ld" : "/p2.ld";
+        CmdArgs.push_back("-T");
+        CmdArgs.push_back(Args.MakeArgString(getToolChain().computeSysRoot() + Script));
+    }
 
     C.addCommand(std::make_unique<Command>(JA, *this, ResponseFileSupport::AtFileCurCP(),
                                             Args.MakeArgString(Linker), CmdArgs, Inputs));
