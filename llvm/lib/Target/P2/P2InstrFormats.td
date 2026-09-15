@@ -128,7 +128,7 @@ class P2Inst<bits<5> type, dag outs, dag inputs, string asmstr>: Instruction {
 
     let AsmString = asmstr;
 
-    // TSFlags layout should be kept in sync with P2InstrInfo.h.
+    // TSFlags layout should be kept in sync with MCTargetDesc/P2BaseInfo.h.
     // TSFlags 4-0: the type of the instruction
     // TSFlags 5: this instruction has an s field
     // TSFlags 6: this instruction has a d field

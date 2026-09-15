@@ -169,75 +169,51 @@ namespace llvm {
             return getNNum(mi.getDesc().TSFlags);
         }
 
-        static inline int getCondition(const MachineInstr &mi) {
-            switch (getInstructionForm(mi)) {
-            case P2InstCZIDS:
-            case P2InstZIDS:
-            case P2InstCIDS:
-            case P2InstCLIDS:
-            case P2InstCLD:
-            case P2InstCZD:
-            case P2InstCZ:
-            case P2InstCZLD:
-                return mi.getOperand(mi.getDesc().getNumOperands()-2).getImm();
-                break;
-
-            
-            case P2Inst3NIDS:
-            case P2Inst2NIDS:
-            case P2Inst1NIDS:
-            case P2InstIDS:
-            case P2InstLIDS:
-            case P2InstIS:
-            case P2InstLD:
-            case P2InstD:
-            case P2InstRA:
-            case P2InstWRA:
-            case P2InstN:
-                return mi.getOperand(mi.getDesc().getNumOperands()-1).getImm();
-                break;
-            
+        // Every concrete form ends in a condition, followed by an optional
+        // effect. Keep MachineInstr and MCInst interpretation in one place.
+        static inline bool hasEffectField(uint64_t Flags) {
+            switch (getInstructionForm(Flags)) {
+            case P2InstCZIDS: case P2InstZIDS: case P2InstCIDS:
+            case P2InstCLIDS: case P2InstCLD: case P2InstCZD:
+            case P2InstCZ: case P2InstCZLD:
+                return true;
             default:
-                break;
+                return false;
             }
-
-            return ALWAYS;
         }
 
-        static inline int getCondition(const MCInst &mi) {
-            switch (getInstructionForm(mi.getFlags())) {
-            case P2InstCZIDS:
-            case P2InstZIDS:
-            case P2InstCIDS:
-            case P2InstCLIDS:
-            case P2InstCLD:
-            case P2InstCZD:
-            case P2InstCZ:
-            case P2InstCZLD:
-                return mi.getOperand(mi.getNumOperands()-2).getImm();
-                break;
-
-            
-            case P2Inst3NIDS:
-            case P2Inst2NIDS:
-            case P2Inst1NIDS:
-            case P2InstIDS:
-            case P2InstLIDS:
-            case P2InstIS:
-            case P2InstLD:
-            case P2InstD:
-            case P2InstRA:
-            case P2InstWRA:
-            case P2InstN:
-                return mi.getOperand(mi.getNumOperands()-1).getImm();
-                break;
-            
-            default:
-                break;
-            }
-
-            return ALWAYS;
+        static inline int getConditionOperand(uint64_t Flags, unsigned Count) {
+            unsigned Form = getInstructionForm(Flags);
+            if (Form == P2Inst || Form > P2InstN)
+                return -1;
+            unsigned Suffix = hasEffectField(Flags) ? 2 : 1;
+            assert(Count >= Suffix && "Missing P2 condition operand");
+            return Count - Suffix;
         }
+
+        static inline int getCondition(const MachineInstr &MI) {
+            // Descriptor count excludes implicit register-state operands.
+            int Op = getConditionOperand(MI.getDesc().TSFlags,
+                                         MI.getDesc().getNumOperands());
+            return Op < 0 ? ALWAYS : MI.getOperand(Op).getImm();
+        }
+
+        static inline int getCondition(const MCInst &MI) {
+            int Op = getConditionOperand(MI.getFlags(), MI.getNumOperands());
+            return Op < 0 ? ALWAYS : MI.getOperand(Op).getImm();
+        }
+
+        // These forms have no augmentable D/S immediate field.
+        static inline bool canAugment(uint64_t Flags) {
+            switch (getInstructionForm(Flags)) {
+            case P2Inst: case P2InstN: case P2InstWRA: case P2InstRA:
+            case P2InstD: case P2InstCZ: case P2InstCZD:
+                return false;
+            default:
+                return true;
+            }
+        }
+
     }
 
 }

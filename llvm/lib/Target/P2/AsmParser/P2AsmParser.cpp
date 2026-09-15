@@ -265,7 +265,7 @@ namespace {
          * flags in MI must be set
          */
         void createAugInst(MCInst &Aug, int type, int value, int condition) const {
-            assert (type == 1 || type == 2 && "Unknown aug type");
+            assert((type == 1 || type == 2) && "Unknown aug type");
 
             unsigned opc;
 
@@ -321,18 +321,7 @@ namespace {
          * can the MI be aug'd? flags must be set.
          */
         bool canAug(const MCInst &MI) const {
-            auto type = P2::getInstructionForm(MI.getFlags());
-
-            if (type == P2::P2InstN || 
-                type == P2::P2InstWRA ||
-                type == P2::P2InstWRA ||
-                type == P2::P2InstRA ||
-                type == P2::P2InstD || 
-                type == P2::P2InstCZ ||
-                type == P2::P2InstCZD | 
-                type == 0) return false;
-
-            return true;
+            return P2::canAugment(MI.getFlags());
         }
     };
 }

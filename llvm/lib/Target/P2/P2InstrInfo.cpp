@@ -741,13 +741,8 @@ bool P2InstrInfo::annotateFlagState(MachineInstr &MI) const {
     if (MI.isPseudo() || MI.isInlineAsm() || MI.isDebugInstr())
         return false;
     unsigned Effect = 0;
-    switch (P2::getInstructionForm(MI)) {
-    case P2::P2InstCZIDS: case P2::P2InstZIDS: case P2::P2InstCIDS:
-    case P2::P2InstCLIDS: case P2::P2InstCLD: case P2::P2InstCZD:
-    case P2::P2InstCZ: case P2::P2InstCZLD:
+    if (P2::hasEffectField(MI.getDesc().TSFlags))
         Effect = MI.getOperand(MI.getDesc().getNumOperands() - 1).getImm();
-        break;
-    }
     // GETCT's WC bit selects the high counter half; it preserves C.
     if (MI.getOpcode() == P2::GETCT)
         Effect = 0;

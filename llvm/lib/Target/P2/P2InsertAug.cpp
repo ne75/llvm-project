@@ -44,7 +44,7 @@ namespace {
          * Insert an aug with the given parameters before MI
          */
         void createAugInst(MachineInstr &MI, int type, int value, int condition) const {
-            assert (type == 1 || type == 2 && "Unknown aug type");
+            assert((type == 1 || type == 2) && "Unknown aug type");
 
             auto *TII = TM.getInstrInfo();
             unsigned opc;
@@ -103,18 +103,7 @@ namespace {
         }
 
         bool canAug(const MachineInstr &MI) const {
-            int type = P2::getInstructionForm(MI);
-
-            if (type == P2::P2InstN || 
-                type == P2::P2InstWRA ||
-                type == P2::P2InstWRA ||
-                type == P2::P2InstRA ||
-                type == P2::P2InstD || 
-                type == P2::P2InstCZ ||
-                type == P2::P2InstCZD ||
-                type == 0) return false;
-
-            return true;
+            return P2::canAugment(MI.getDesc().TSFlags);
         }
 
         bool runOnMachineFunction(MachineFunction &MF) override {
